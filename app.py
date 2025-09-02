@@ -130,57 +130,31 @@ with tab_tutor:
 
 # --- Restaurants ---
 with tab_food:
-    st.subheader("Restaurants near me")
-    st.caption("Uses Google Places. Provide a location (address or 'lat,lng'), a cuisine, and a per-person budget.")
+    st.header("Restaurant Finder")
+    st.sidebar.header("Enter Your Preferences")
+    location = st.sidebar.text_input("Enter your location (latitude,longitude)", "53.349805,-6.26031")  # Default: Dublin
+    cuisine = st.sidebar.selectbox("Preferred cuisine", ["Italian", "Indian", "Chinese", "Mexican", "Other"])
+    budget = st.sidebar.number_input("Enter your budget (in euros)", min_value=0.0, step=0.5)
+    radius = st.sidebar.slider("Search radius (meters)", 500, 50000, 50000)  # Radius default set to 50 km
 
-    col1, col2 = st.columns([2,1])
-    with col1:
-        location = st.text_input("Location", value="Dublin, Ireland")
-        cuisine = st.selectbox("Cuisine", ["Any", "Italian", "Indian", "Chinese", "Mexican", "Thai", "Japanese", "Cafe", "Other"], index=1)
-    with col2:
-        budget = st.number_input("Budget per person (€)", min_value=0.0, value=20.0, step=1.0)
-        radius_km = st.slider("Search radius (km)", 1, 30, 5)
-
-    go = st.button("🔎 Find Restaurants")
-    if go:
-        if not GOOGLE_MAPS_API_KEY:
-            st.error("Google Maps API key not set. Add GOOGLE_MAPS_API_KEY via Streamlit Secrets.")
-        else:
-            # Parse location: allow "lat,lng" or free-text address
-            lat_lng = None
-            if "," in location:
-                try:
-                    p1, p2 = location.split(",", 1)
-                    lat_lng = (float(p1.strip()), float(p2.strip()))
-                except Exception:
-                    lat_lng = None
-            if lat_lng is None:
-                lat_lng = geocode_address(location)
-
-            if not lat_lng:
-                st.error("Could not resolve location. Try 'lat,lng' or a clearer address.")
+    if st.sidebar.button("Find Restaurants"):
+        with st.spinner("Finding the best restaurants for you..."):
+            restaurants = get_nearby_restaurants(location, cuisine, radius)
+            if not restaurants:
+                st.error("No restaurants found. Try increasing the radius or changing the cuisine.")
             else:
-                lat, lng = lat_lng
-                radius_m = int(radius_km * 1000)
-                query = "" if cuisine=="Any" else cuisine
-                results = nearby_restaurants(lat, lng, query, radius_m=radius_m)
-                results = filter_by_budget(results, budget)
+                restaurant_list = [
+                    {"name": r["name"], "rating": r.get("rating", "N/A"), "price_level": r.get("price_level", "N/A"), "address": r.get("vicinity", "N/A")}
+                    for r in restaurants
+                ]
+                recommendation = get_chatgpt_recommendation(restaurant_list, budget)
+                st.success("Here is our recommendation:")
+                st.write(recommendation)
 
-                if not results:
-                    st.warning("No results. Try increasing radius or changing cuisine.")
-                else:
-                    st.success(f"Found {len(results)} place(s).")
-                    # Recommendation via GPT (optional)
-                    rec = recommend_with_gpt(results, budget, cuisine if cuisine!="Any" else "general")
-                    if rec and not rec.startswith("(Error"):
-                        st.info(rec)
-
-                    for r in results[:20]:
-                        st.markdown("---")
-                        st.markdown(f"**{r.get('name','(no name)')}**")
-                        st.write(r.get("vicinity",""))
-                        rating = r.get("rating", "N/A")
-                        total = r.get("user_ratings_total", "N/A")
-                        price_level = price_level_to_text(r.get("price_level"))
-                        st.write(f"⭐ {rating} ({total} reviews) · 💲 {price_level}")
-   
+                st.subheader("Nearby Restaurants")
+                for r in restaurant_list:
+                    st.write(f"**{r['name']}**")
+                    st.write(f"- Rating: {r['rating']}")
+                    st.write(f"- Price Level: {r['price_level']}")
+                    st.write(f"- Address: {r['address']}")
+                    st.write("---")
