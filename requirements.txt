@@ -3,6 +3,8 @@ numpy
 pandas
 scipy
 sympy
+azure-ai-textanalytics
+AzureOpenAI
 matplotlib
 plotly>=5.18
 openai>=1.0.0
