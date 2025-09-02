@@ -5,15 +5,13 @@ import pandas as pd
 import plotly.express as px
 from io import StringIO
 
-# -------------------- Azure OpenAI (deployment name hardcoded) --------------------
-# Fill these in EITHER by editing the strings below OR by setting Streamlit Secrets or env vars.
-# Safer (recommended): leave the strings "", and set them in Streamlit "Secrets" instead.
+
 AZURE_OPENAI_ENDPOINT    =  "https://testaisentiment.openai.azure.com/"
 AZURE_OPENAI_API_KEY     =  "cb1c33772b3c4edab77db69ae18c9a43"
 AZURE_OPENAI_API_VERSION =  "2024-02-15-preview"
 
-# 👇 this is the *deployment name* you see under Azure → OpenAI → Deployments
-DEPLOYMENT_NAME = "aipocexploration"  # change if your deployment has a different name
+
+DEPLOYMENT_NAME = "aipocexploration"  
 
 OPENAI_OK = True
 client = None
