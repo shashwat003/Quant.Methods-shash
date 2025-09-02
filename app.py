@@ -70,81 +70,36 @@ def geocode_address(address: str):
     return None
 
 
-def nearby_restaurants(lat: float, lng: float, cuisine: str, radius_m: int = 5000):
-    """
-    Use Places Nearby Search to find restaurants around (lat, lng), filtered by cuisine keyword.
-    """
-    if not GOOGLE_MAPS_API_KEY:
-        return []
+def nearby_restaurants(location, cuisine, radius=50000):  # Radius set to 50 km
     url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
     params = {
-        "location": f"{lat},{lng}",
-        "radius": radius_m,
+        "location": location,  # Format: "latitude,longitude"
+        "radius": radius,  # Radius in meters
         "type": "restaurant",
         "keyword": cuisine,
-        "key": GOOGLE_MAPS_API_KEY,
+        "key": google_api_key,
     }
-    r = requests.get(url, params=params, timeout=15)
-    if r.status_code != 200:
-        return []
-    return r.json().get("results", [])
-
-
-def price_level_to_text(level):
-    # Google price_level: 0 (Free) to 4 (Very Expensive)
-    mapping = {0: "Free", 1: "Inexpensive", 2: "Moderate", 3: "Expensive", 4: "Very Expensive"}
-    if isinstance(level, int):
-        return mapping.get(level, "N/A")
-    return "N/A"
-
-
-def filter_by_budget(restaurants, budget_eur: float):
-    """
-    Very rough mapping from budget to Google price_level.
-    You can tweak the thresholds to your preference.
-    """
-    if budget_eur <= 0:
-        return restaurants
-    # heuristic: under 15€ → <=1, 15–30 → <=2, 30–60 → <=3, >60 → allow all
-    if budget_eur <= 15:
-        max_pl = 1
-    elif budget_eur <= 30:
-        max_pl = 2
-    elif budget_eur <= 60:
-        max_pl = 3
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        return response.json().get("results", [])
     else:
-        max_pl = 4
-    out = []
-    for r in restaurants:
-        pl = r.get("price_level")
-        if pl is None or pl <= max_pl:
-            out.append(r)
-    return out
+        return []
 
-
-def recommend_with_gpt(restaurants, budget_eur: float, cuisine: str):
-    """
-    Ask your Azure OpenAI deployment to pick one place and say why.
-    """
-    short_list = [
-        {
-            "name": r.get("name"),
-            "rating": r.get("rating"),
-            "user_ratings_total": r.get("user_ratings_total"),
-            "price_level": r.get("price_level"),
-            "address": r.get("vicinity"),
-        }
-        for r in restaurants[:10]  # keep prompt short
+# Function to analyze and recommend using ChatGPT
+def get_chatgpt_recommendation(restaurants, budget):
+    message_text = [
+        {"role": "system", "content": "You are an expert in financial advice and restaurant recommendations."},
+        {"role": "user", "content": f"Here is a list of restaurants: {restaurants}. Recommend the best restaurant within a budget of {budget} euros, considering ratings and price level."}
     ]
-    msg = [
-        {"role": "system", "content": "You are a helpful assistant that recommends restaurants succinctly."},
-        {"role": "user", "content":
-            f"Given these restaurants (JSON): {short_list}\n"
-            f"Recommend ONE {cuisine} option within a {budget_eur:.0f} EUR per-person budget. "
-            f"Prefer higher rating and more reviews. Reply in 2-3 sentences."}
-    ]
-    return ask_gpt(msg, max_tokens=180)
-
+    try:
+        response = openai_client.chat.completions.create(
+            model="aipocexploration",  # Use the model you’ve deployed in Azure OpenAI
+            messages=message_text,
+            max_tokens=150,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"Error: {e}"
 
 # ======================
 # Streamlit application
