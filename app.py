@@ -172,49 +172,125 @@ with tab_tutor:
         st.chat_message("assistant").write(a)
 
 # --- Restaurants ---
+# --- Restaurants ---
 with tab_food:
     st.subheader("Restaurants near me")
-    st.caption("Uses Google Places. Provide a location (address or 'lat,lng'), a cuisine, and a per-person budget.")
+    st.caption("Type a place (e.g., 'Blackrock'), an address, or 'lat,lng'. You can also auto-detect (approx) using your IP.")
 
+    # ---------- helpers (drop these once in your file if not already present) ----------
+    import requests
+
+    def geocode_address(address: str, country_bias: str = "IE"):
+        """
+        Resolve free-text address (e.g., 'Blackrock') to (lat, lng) using Google Geocoding.
+        Adds country/region bias so Irish towns resolve reliably.
+        Returns tuple (lat, lng) or None.
+        """
+        if not GOOGLE_MAPS_API_KEY:
+            return None
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+
+        # try #1: as-is, with region bias
+        params = {"address": address, "key": GOOGLE_MAPS_API_KEY, "region": country_bias}
+        r = requests.get(url, params=params, timeout=15)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("results"):
+                loc = data["results"][0]["geometry"]["location"]
+                return (loc["lat"], loc["lng"])
+
+        # try #2: add components filter (country)
+        params = {"address": address, "key": GOOGLE_MAPS_API_KEY, "components": f"country:{country_bias.lower()}"}
+        r = requests.get(url, params=params, timeout=15)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("results"):
+                loc = data["results"][0]["geometry"]["location"]
+                return (loc["lat"], loc["lng"])
+
+        # try #3: append ', Ireland' as a last resort (helps for 'Blackrock')
+        params = {"address": f"{address}, Ireland", "key": GOOGLE_MAPS_API_KEY}
+        r = requests.get(url, params=params, timeout=15)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("results"):
+                loc = data["results"][0]["geometry"]["location"]
+                return (loc["lat"], loc["lng"])
+
+        return None
+
+    def get_ip_location():
+        """
+        Approximate location via IP (no browser GPS; just IP geolocation).
+        Returns (lat, lng) or None.
+        """
+        try:
+            r = requests.get("https://ipapi.co/json/", timeout=10)
+            if r.status_code == 200:
+                j = r.json()
+                lat, lng = j.get("latitude"), j.get("longitude")
+                if lat is not None and lng is not None:
+                    return (float(lat), float(lng))
+        except Exception:
+            pass
+        return None
+
+    # ---------- UI ----------
     col1, col2 = st.columns([2,1])
     with col1:
-        location = st.text_input("Location", value="Dublin, Ireland")
+        location = st.text_input("Location", value="Dublin, Ireland", help="Place name, address, or 'lat,lng'")
         cuisine = st.selectbox("Cuisine", ["Any", "Italian", "Indian", "Chinese", "Mexican", "Thai", "Japanese", "Cafe", "Other"], index=1)
     with col2:
         budget = st.number_input("Budget per person (€)", min_value=0.0, value=20.0, step=1.0)
         radius_km = st.slider("Search radius (km)", 1, 30, 5)
 
-    go = st.button("🔎 Find Restaurants")
-    if go:
+    c1, c2 = st.columns(2)
+    with c1:
+        go = st.button("🔎 Find Restaurants")
+    with c2:
+        use_ip = st.button("📍 Use my current location (IP-based)")
+
+    lat_lng = None
+    if use_ip:
+        with st.spinner("Detecting your approximate location…"):
+            lat_lng = get_ip_location()
+            if lat_lng:
+                st.success(f"Detected approx location: {lat_lng[0]:.5f}, {lat_lng[1]:.5f}")
+            else:
+                st.error("Couldn't detect location from IP. Please type a place or paste 'lat,lng'.")
+
+    if go or (use_ip and lat_lng):
         if not GOOGLE_MAPS_API_KEY:
             st.error("Google Maps API key not set. Add GOOGLE_MAPS_API_KEY via Streamlit Secrets.")
         else:
-            # Parse location: allow "lat,lng" or free-text address
-            lat_lng = None
-            if "," in location:
-                try:
-                    p1, p2 = location.split(",", 1)
-                    lat_lng = (float(p1.strip()), float(p2.strip()))
-                except Exception:
-                    lat_lng = None
-            if lat_lng is None:
-                lat_lng = geocode_address(location)
+            # Resolve user input unless we already detected IP coords
+            if not lat_lng:
+                # Accept direct 'lat,lng'
+                if "," in location:
+                    try:
+                        p1, p2 = location.split(",", 1)
+                        lat_lng = (float(p1.strip()), float(p2.strip()))
+                    except Exception:
+                        lat_lng = None
+                # Else geocode free text with IE bias & fallbacks
+                if lat_lng is None:
+                    lat_lng = geocode_address(location, country_bias="IE")
 
             if not lat_lng:
-                st.error("Could not resolve location. Try 'lat,lng' or a clearer address.")
+                st.error("Could not resolve location. Try a clearer place name, a full address, or 'lat,lng'.")
             else:
                 lat, lng = lat_lng
                 radius_m = int(radius_km * 1000)
-                query = "" if cuisine=="Any" else cuisine
+                query = "" if cuisine == "Any" else cuisine
                 results = nearby_restaurants(lat, lng, query, radius_m=radius_m)
                 results = filter_by_budget(results, budget)
 
                 if not results:
-                    st.warning("No results. Try increasing radius or changing cuisine.")
+                    st.warning("No results. Try increasing the radius or changing cuisine.")
                 else:
                     st.success(f"Found {len(results)} place(s).")
-                    # Recommendation via GPT (optional)
-                    rec = recommend_with_gpt(results, budget, cuisine if cuisine!="Any" else "general")
+                    # Optional: quick GPT pick
+                    rec = recommend_with_gpt(results, budget, cuisine if cuisine != "Any" else "general")
                     if rec and not rec.startswith("(Error"):
                         st.info(rec)
 
