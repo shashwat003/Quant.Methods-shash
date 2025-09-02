@@ -149,35 +149,13 @@ def recommend_with_gpt(restaurants, budget_eur: float, cuisine: str):
 # ======================
 # Streamlit application
 # ======================
-st.set_page_config(page_title="AOAI + Streamlit (Minimal) + Restaurants", page_icon="🤖", layout="wide")
-st.title("🤖 Azure OpenAI + Streamlit (Minimal)")
-st.caption("Hardcoded Azure deployment name + a simple restaurant finder tab (budget + cuisine).")
+st.set_page_config(page_title="Quant Methods for Finance", page_icon="📊", layout="wide")
+st.title("📊 Quant Methods for Finance")
+st.caption("Interactive tutor + restaurant finder for students")
 
-tab_news, tab_tutor, tab_food = st.tabs(["📰 News Ticker", "💬 GPT Tutor", "🍽️ Find Restaurants"])
+tab_news, tab_tutor, tab_food = st.tabs(["💬 GPT Tutor", "🍽️ Find Restaurants"])
 
-# --- News Ticker ---
-with tab_news:
-    st.subheader("News Ticker")
-    if st.button("Generate headlines"):
-        text = ask_gpt([
-            {"role": "system", "content": "You write short, punchy finance/tech headlines."},
-            {"role": "user", "content": "Give 5 concise, current-sounding headlines (no dates/sources)."},
-        ], max_tokens=180)
-        st.markdown(
-            f"<div style='background:#0a5;color:white;padding:10px;border-radius:8px;'>"
-            f"<marquee behavior='scroll' direction='left' scrollamount='6'>{text}</marquee></div>",
-            unsafe_allow_html=True,
-        )
-    with st.expander("Azure connection status"):
-        def mask(s): return s[:4]+"…"+s[-4:] if isinstance(s,str) and len(s)>8 else s
-        st.write({
-            "endpoint_set": bool(AZURE_OPENAI_ENDPOINT.endswith(".openai.azure.com")),
-            "api_key_set": bool(AZURE_OPENAI_API_KEY),
-            "api_version": AZURE_OPENAI_API_VERSION,
-            "deployment_name": DEPLOYMENT_NAME,
-            "endpoint_sample": mask(AZURE_OPENAI_ENDPOINT),
-            "key_sample": mask(AZURE_OPENAI_API_KEY),
-        })
+
 
 # --- GPT Tutor ---
 with tab_tutor:
