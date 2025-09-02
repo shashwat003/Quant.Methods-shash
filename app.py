@@ -153,7 +153,7 @@ st.set_page_config(page_title="Quant Methods for Finance", page_icon="📊", lay
 st.title("📊 Quant Methods for Finance")
 st.caption("Interactive tutor + restaurant finder for students")
 
-tab_news, tab_tutor, tab_food = st.tabs(["💬 GPT Tutor", "🍽️ Find Restaurants"])
+tab_tutor, tab_food = st.tabs(["💬 GPT Tutor", "🍽️ Find Restaurants"])
 
 
 
