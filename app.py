@@ -159,7 +159,7 @@ tab_tutor, tab_food = st.tabs(["Your own Tutor", "🍽️ Find Restaurants"])
 
 # --- GPT Tutor ---
 with tab_tutor:
-    st.subheader("GPT Tutor")
+    st.subheader("Your own Tutor")
     if "chat" not in st.session_state:
         st.session_state.chat = [
             {"role": "system", "content": "You are a friendly quant tutor. Use tiny numeric examples and clear steps."}
