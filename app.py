@@ -1,30 +1,30 @@
-# app.py — Bank of Shash • Business Support (Streamlit, dark professional UI)
-import os
-import time
+# app.py — Bank of Shash • Customer Support (Streamlit, dark professional UI inspired by your reference)
 import streamlit as st
+import os
 
 # =========================
 # PAGE & THEME CONFIG
 # =========================
 st.set_page_config(
-    page_title="Bank of Shash • Business Banking Support",
+    page_title="Bank of Shash • Customer Support",
     page_icon="🏦",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 # ---- Color palette (professional dark) ----
-BG_DARK     = "#0b1220"  # page background (deep navy)
-PANEL_DARK  = "#0f172a"  # card bg (slate-900)
-BORDER      = "#1e293b"  # card border (slate-800)
-TEXT_MAIN   = "#e5e7eb"  # text (slate-200)
-TEXT_SOFT   = "#94a3b8"  # muted text (slate-400)
-PRIMARY     = "#22d3ee"  # cyan-400
-PRIMARY_D   = "#06b6d4"  # cyan-500
-ACCENT      = "#7c3aed"  # violet-600
-GOOD        = "#22c55e"  # green-500
-BAD         = "#ef4444"  # red-500
-PILL_BG     = "#0b3b38"  # deep teal for little pills
+BG_DARK     = "#0b1220"   # deep navy
+PANEL_DARK  = "#0f172a"   # slate-900
+BORDER      = "#1e293b"   # slate-800
+TEXT_MAIN   = "#e5e7eb"   # slate-200
+TEXT_SOFT   = "#94a3b8"   # slate-400
+PRIMARY     = "#22d3ee"   # cyan-400
+PRIMARY_D   = "#06b6d4"   # cyan-500
+ACCENT      = "#7c3aed"   # violet-600
+GOOD        = "#22c55e"   # green-500
+WARN        = "#f59e0b"   # amber-500
+
+PHONE_NUMBER = "+35345933308"
 
 # =========================
 # HARD-CODED AZURE OPENAI
@@ -32,7 +32,7 @@ PILL_BG     = "#0b3b38"  # deep teal for little pills
 AZURE_OPENAI_ENDPOINT    = "https://testaisentiment.openai.azure.com/"
 AZURE_OPENAI_API_KEY     = "cb1c33772b3c4edab77db69ae18c9a43"
 AZURE_OPENAI_API_VERSION = "2024-02-15-preview"
-AZURE_OPENAI_DEPLOYMENT  = "aipocexploration"
+AZURE_OPENAI_DEPLOYMENT  = "AIzaSyCRHbWFgUuSIjOm3CgHNKq6Q8RLMKXjlKU"
 
 # =========================
 # STYLES
@@ -44,24 +44,6 @@ st.markdown(
         background: {BG_DARK};
         color: {TEXT_MAIN};
       }}
-      .stButton>button {{
-        background: linear-gradient(180deg, {PRIMARY} 0%, {PRIMARY_D} 100%);
-        color: #001016;
-        font-weight: 700;
-        border: 0;
-        border-radius: 12px;
-        padding: 0.6rem 1rem;
-        box-shadow: 0 6px 20px rgba(34,211,238,0.18);
-      }}
-      .pill {{
-        display:inline-flex; align-items:center; gap:8px;
-        padding: 6px 12px;
-        border-radius: 999px;
-        font-size: 0.85rem;
-        background: #0b3b38;
-        color: {PRIMARY};
-        border: 1px solid #0e4b48;
-      }}
       .card {{
         background: {PANEL_DARK};
         border: 1px solid {BORDER};
@@ -70,14 +52,27 @@ st.markdown(
         box-shadow: 0 12px 40px rgba(2,6,23,0.45);
       }}
       .headline {{
-        font-size: 1.95rem; font-weight: 800; letter-spacing:-0.02em;
+        font-size: 2.0rem; font-weight: 800; letter-spacing:-0.02em;
       }}
-      .soft {{
-        color: {TEXT_SOFT};
+      .soft {{ color: {TEXT_SOFT}; }}
+      .pill {{
+        display:inline-flex; align-items:center; gap:8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        background: rgba(34,211,238,0.14);
+        color: {PRIMARY};
+        border: 1px solid rgba(34,211,238,0.28);
       }}
-      .kpi {{ font-size: 2.0rem; font-weight: 800; }}
-      .good {{ color: {GOOD}; }}
-      .bad {{ color: {BAD}; }}
+      .btn {{
+        display:inline-block; padding: 10px 14px; border-radius:12px;
+        background: linear-gradient(180deg, {PRIMARY} 0%, {PRIMARY_D} 100%);
+        color:#001016; text-decoration:none !important; font-weight:700;
+        box-shadow: 0 6px 20px rgba(34,211,238,0.18);
+      }}
+      .btn:active {{ transform: translateY(1px); }}
+      .good {{ color: {GOOD}; font-weight:700; }}
+      .warn {{ color: {WARN}; font-weight:700; }}
       /* marquee banner */
       .ticker-wrap {{
         width: 100%;
@@ -99,8 +94,10 @@ st.markdown(
         0%   {{ transform: translateX(100%); }}
         100% {{ transform: translateX(-100%); }}
       }}
-      /* chat message colors (dark mode friendly) */
+      /* chat colors */
       .stChatMessage .stMarkdown p {{ color: {TEXT_MAIN}; }}
+      .stTextInput>div>div>input {{ background:{PANEL_DARK}; color:{TEXT_MAIN}; border:1px solid {BORDER}; }}
+      .stTextArea textarea {{ background:{PANEL_DARK}; color:{TEXT_MAIN}; border:1px solid {BORDER}; }}
     </style>
     """,
     unsafe_allow_html=True
@@ -123,8 +120,7 @@ except Exception:
 
 def ask_gpt(messages, temperature: float = 0.2, max_tokens: int = 700) -> str:
     if not OPENAI_OK or not AZURE_OPENAI_DEPLOYMENT:
-        return ("(Model not configured. Please hard-code AZURE settings at the top "
-                "or provide valid credentials.)")
+        return ("(Model not configured. Update AZURE_OPENAI_* constants at top of app.py.)")
     try:
         resp = client.chat.completions.create(
             model=AZURE_OPENAI_DEPLOYMENT,
@@ -139,21 +135,21 @@ def ask_gpt(messages, temperature: float = 0.2, max_tokens: int = 700) -> str:
 # =========================
 # HEADER
 # =========================
-top_l, top_r = st.columns([0.75, 0.25])
-with top_l:
+hdr_l, hdr_r = st.columns([0.75, 0.25])
+with hdr_l:
     st.markdown(
         f"""
         <div style="display:flex; gap:14px; align-items:center;">
-          <div class="headline">Business Banking Support</div>
-          <span class="pill">● Live Data</span>
-          <span class="soft">Senior Business Support</span>
+          <div style="width:46px; height:46px; background:{ACCENT}; border-radius:12px;"></div>
+          <div class="headline">Bank of Shash — Customer Support</div>
+          <span class="pill">● Live</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
-with top_r:
+with hdr_r:
     st.markdown(
-        '<div style="text-align:right;"><a href="tel:+35345933308" class="pill">📞 Call +35345933308</a></div>',
+        f'<div style="text-align:right;"><a class="btn" href="tel:{PHONE_NUMBER}">📞 Call {PHONE_NUMBER}</a></div>',
         unsafe_allow_html=True,
     )
 
@@ -161,14 +157,14 @@ with top_r:
 # MOVING UPDATE (Ticker)
 # =========================
 st.markdown(
-    """
+    f"""
     <div class="ticker-wrap">
       <div class="ticker">
         🌱 We have introduced <b>Green Mortgage</b> with preferential rates for energy-efficient homes —
-        <a href="https://bankofshash.example/green-mortgage" target="_blank">click here to learn more</a>
-        or call <a href="tel:+35345933308">+35345933308</a> to talk to our agent.
+        <a href="#" onclick="window.alert('A support specialist will contact you shortly.');return false;">click here to learn more</a>
+        or call <a href="tel:{PHONE_NUMBER}">{PHONE_NUMBER}</a> to talk to our agent.
         &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
-        🌍 Financing a renovation? Ask our agent about **Home Energy Upgrade** bundles.
+        💡 Ask in chat: “Tell me about Green Mortgage eligibility.”
       </div>
     </div>
     """,
@@ -176,160 +172,109 @@ st.markdown(
 )
 
 # =========================
-# CUSTOMER HEADER CARD
+# CUSTOMER SUPPORT LAYOUT
 # =========================
-st.markdown(
-    f"""
-    <div class="card" style="padding:22px; margin-bottom:14px;">
-      <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-        <div style="width:44px; height:44px; background:{ACCENT}; border-radius:12px;"></div>
-        <div>
-          <div style="font-weight:800; font-size:1.25rem;">Lighthouse Financial Services</div>
-          <div class="soft">Business ID: BIZ-789123 • Private Limited Company • Active Call: 00:04:32</div>
-        </div>
-        <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
-          <span class="pill" title="Tier">premium Business</span>
-          <span class="pill" style="color:{GOOD}">active</span>
-        </div>
-      </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+left, right = st.columns([0.52, 0.48])
 
-# =========================
-# BODY LAYOUT
-# =========================
-left, right = st.columns([0.55, 0.45])
-
-# --- LEFT: Social / Insights style block ---
+# --- LEFT: Support options / status ---
 with left:
     st.markdown(
-        f"""
+        """
         <div class="card">
           <div style="display:flex; align-items:center; justify-content:space-between;">
-            <div style="font-weight:800; font-size:1.15rem;">Business Social Media Intelligence</div>
-            <div class="soft">● Live monitoring</div>
+            <div style="font-weight:800; font-size:1.15rem;">Help Center</div>
+            <span class="soft">Secure & 24/7</span>
           </div>
-          <div class="soft" style="margin-top:4px;">Corporate online presence analysis</div>
+          <div class="soft" style="margin-top:4px;">Choose a quick action or ask in chat.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-          <div style="margin-top:16px; display:grid; gap:14px;">
-            <div style="display:flex; gap:12px;">
-              <div style="width:26px; height:26px; border-radius:6px; background:#3b82f6;"></div>
-              <div>
-                <div><b>LinkedIn Business</b> <span class="soft">· 2 hours ago</span></div>
-                <div class="soft">Posted about expanding AI services to healthcare sector. Received 127 likes, 23 comments.</div>
-                <div class="soft">127 likes · 23 comments</div>
-              </div>
-            </div>
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("Report Lost Card", use_container_width=True):
+            st.session_state.setdefault("messages", [])
+            st.session_state.messages.append({"role":"user","content":
+                "I lost my card. Please block it and send a replacement."})
+            st.rerun()
+    with c2:
+        if st.button("Dispute a Charge", use_container_width=True):
+            st.session_state.setdefault("messages", [])
+            st.session_state.messages.append({"role":"user","content":
+                "I need to dispute a card transaction from yesterday."})
+            st.rerun()
+    with c3:
+        if st.button("Mortgage Support", use_container_width=True):
+            st.session_state.setdefault("messages", [])
+            st.session_state.messages.append({"role":"user","content":
+                "Tell me about the new Green Mortgage and eligibility."})
+            st.rerun()
 
-            <div style="display:flex; gap:12px;">
-              <div style="width:26px; height:26px; border-radius:6px; background:#000;"></div>
-              <div>
-                <div><b>Twitter Business</b> <span class="soft">· 5 hours ago</span></div>
-                <div class="soft">Announced partnership with TechCorp for advanced AI solutions. #AI #Innovation</div>
-                <div class="soft">89 likes · 45 retweets</div>
-              </div>
-            </div>
-
-            <div style="display:flex; gap:12px;">
-              <div style="width:26px; height:26px; border-radius:6px; background:#8b5cf6;"></div>
-              <div>
-                <div><b>Website Analytics</b> <span class="soft">· Last 24h</span></div>
-                <div style="display:flex; gap:22px; margin-top:6px;">
-                  <div><div class="kpi">2.4K</div><div class="soft">Visits</div></div>
-                  <div><div class="kpi">18</div><div class="soft">Leads</div></div>
-                  <div><div class="kpi">7</div><div class="soft">Demos</div></div>
-                </div>
-              </div>
-            </div>
+    st.markdown(
+        f"""
+        <div class="card" style="margin-top:14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div style="font-weight:800; font-size:1.15rem;">Contact Options</div>
+            <a class="btn" href="tel:{PHONE_NUMBER}">📞 Call {PHONE_NUMBER}</a>
+          </div>
+          <div class="soft" style="margin-top:6px;">
+            • Phone agent (Retell AI) available 24/7.<br/>
+            • For urgent card blocks, calling is fastest. <span class="good">Typical wait &lt; 1 min</span>.
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-# --- RIGHT: Chat + Products teaser ---
+# --- RIGHT: Chat assistant ---
 with right:
-    # Products panel
     st.markdown(
         f"""
-        <div class="card" style="margin-bottom:14px;">
-          <div style="display:flex; align-items:center; justify-content:space-between;">
-            <div style="font-weight:800; font-size:1.15rem;">Business Banking Products</div>
-            <div class="soft">$0 <span class="soft">Total Portfolio</span></div>
-          </div>
-          <div class="soft">Commercial accounts & services</div>
-
-          <div style="margin-top:10px;">
-            <div class="soft" style="font-weight:700;">Recent Transactions</div>
-            <div style="margin-top:6px; display:grid; gap:6px;">
-              <div style="display:flex; justify-content:space-between;">
-                <span>TechCorp Invoice Payment</span><span class="bad">-$125,000</span>
-              </div>
-              <div style="display:flex; justify-content:space-between;">
-                <span>Client Deposit - MedCorp</span><span class="good">+$89,500</span>
-              </div>
-              <div style="display:flex; justify-content:space-between;">
-                <span>Office Rent Payment</span><span class="bad">-$15,000</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # Chat panel
-    st.markdown(
-        f"""
-        <div class="card">
+        <div class="card" style="margin-bottom:10px;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
             <div style="font-weight:800; font-size:1.15rem;">💬 Secure Chat</div>
-            <a href="tel:+35345933308" class="pill">Or Call +35345933308</a>
+            <a class="pill" href="tel:{PHONE_NUMBER}">Or call {PHONE_NUMBER}</a>
           </div>
-          <div class="soft">This assistant follows your Retell AI prompt and can hand off to phone support.</div>
+          <div class="soft">Do not share full card numbers or passwords here.</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # Chat engine (below the styled header)
     if "messages" not in st.session_state:
         st.session_state.messages = [
             {"role": "system",
-             "content": ("You are the Bank of Shash virtual assistant. Be concise, friendly, and professional. "
-                         "Verify identity before account-specific help. Never ask for full card/PIN. "
-                         "Offer phone handoff at +35345933308 when appropriate.")},
-            {"role": "assistant", "content": "Hi! I'm your Bank of Shash assistant. How can I help today?"}
+             "content": ("You are the Bank of Shash customer support assistant. "
+                         "Be concise, friendly, and compliant. Verify identity before discussing account specifics. "
+                         "Never request full card/PIN. Offer a phone handoff at +35345933308 when appropriate.")},
+            {"role": "assistant", "content": "Hi! I’m your Bank of Shash assistant. How can I help today?"}
         ]
 
-    # render chat history (skip system in visible UI)
     for m in st.session_state.messages[1:]:
-        with st.chat_message("assistant" if m["role"] == "assistant" else "user"):
+        with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
             st.write(m["content"])
 
     user_text = st.chat_input("Type your message…")
     if user_text:
-        st.session_state.messages.append({"role": "user", "content": user_text})
+        st.session_state.messages.append({"role":"user","content":user_text})
         with st.chat_message("user"):
             st.write(user_text)
 
-        # generate reply
         try:
             reply = ask_gpt(st.session_state.messages)
             if reply.startswith("(Model not configured") or reply.startswith("(Error"):
-                # graceful fallback messages
+                # graceful fallback if creds missing
                 if "lost" in user_text.lower() and "card" in user_text.lower():
-                    reply = ("I’m sorry to hear that. I can help you block your card now after verification, "
-                             "or you can call our automated agent at +35345933308 for immediate action.")
+                    reply = ("I can help you block your card now after verification, "
+                             f"or you can call our automated agent at {PHONE_NUMBER} for immediate action.")
                 else:
-                    reply = ("I can help here, or you can reach the phone agent at +35345933308. "
+                    reply = (f"I can help here, or you can reach our phone agent at {PHONE_NUMBER}. "
                              "For account-specific help I’ll need to verify your identity.")
         except Exception as e:
-            reply = f"Something went wrong. Please try again or call +35345933308. ({e})"
+            reply = f"Something went wrong. Please try again or call {PHONE_NUMBER}. ({e})"
 
-        st.session_state.messages.append({"role": "assistant", "content": reply})
+        st.session_state.messages.append({"role":"assistant","content":reply})
         with st.chat_message("assistant"):
             st.write(reply)
 
@@ -337,4 +282,4 @@ with right:
 # FOOTER
 # =========================
 st.markdown("<hr style='border-color:#1f2937;'>", unsafe_allow_html=True)
-st.caption("© Bank of Shash — Secure support. Never share full PINs or passwords in chat.  •  Voice agent: +35345933308")
+st.caption(f"© Bank of Shash — Secure support. Never share full PINs or passwords in chat.  •  Voice agent: {PHONE_NUMBER}")
