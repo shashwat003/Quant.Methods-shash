@@ -1,5 +1,6 @@
 # app.py — Bank of Shash • Customer Support
 # Clean chat layout (no mixed ordering), verification FSM, readable buttons, rich banking content.
+# FIX: last-4 parsing accepts plain digits; on mismatch, FSM goes back to last-4 step.
 
 import re
 import streamlit as st
@@ -96,7 +97,7 @@ Only proceed if verified.
 """
 
 # ────────────────────────────────────────────────────────────────────────────────
-# PARSING & VERIFICATION (with flexible DOB + numeric-only account support)
+# PARSING & VERIFICATION (with flexible DOB + numeric-only account & last4 support)
 # ────────────────────────────────────────────────────────────────────────────────
 MONTHS = {
     "1":"january","01":"january","jan":"january","january":"january",
@@ -132,19 +133,28 @@ LAST4_P = r"(?:last\s*4\s*digits|last\s*four|\*\*\*\*|ending\s*in|last4)\D*(\d{4
 ACCT_P  = r"(?:account\s*number|acct\s*no\.?|a/c|account)\D*(\d{3,})"
 DOB_ANY = r"(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}|(?:\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}))"
 
-def parse_identity(text:str, expect_acct:bool=False):
+def parse_identity(text:str, expect_acct:bool=False, expect_last4:bool=False):
+    """
+    When expect_acct=True, accept a digits-only message as account number.
+    When expect_last4=True, accept a 4-digit-only message as last-4.
+    """
     t = text.strip()
     tl = t.lower()
+
     name = re.search(NAME_P, tl)
-    last4= re.search(LAST4_P, tl)
+    last4 = re.search(LAST4_P, tl)
+    if expect_last4 and not last4:
+        last4 = re.match(r"^\s*(\d{4})\s*$", t)  # <-- accept plain 4 digits
     acct = re.search(ACCT_P, tl)
-    # when we specifically wait for account number, accept a digits-only message
-    acct_only = re.match(r"^\s*(\d{5,})\s*$", t) if expect_acct else None
+    if expect_acct and not acct:
+        acct = re.match(r"^\s*(\d{5,})\s*$", t)  # <-- accept plain digits for account
+
     dobm = re.search(DOB_ANY, t, flags=re.I)
+
     return (" ".join(name.group(1).split()) if name else None,
             last4.group(1) if last4 else None,
             human_dob(dobm.group(1)) if dobm else None,
-            acct.group(1) if acct else (acct_only.group(1) if acct_only else None))
+            acct.group(1) if acct else None)
 
 def verify(name,last4,dob):
     if not name or not last4 or not dob:
@@ -311,15 +321,19 @@ with right:
         st.session_state.messages.append({"role":"user","content":user_text})
 
         v = st.session_state.verif
-        # parse with awareness of current step, so digits-only works for account
-        name, last4, dob, acct = parse_identity(user_text, expect_acct=(v["step"]=="await_acct"))
+        # parse with awareness of current step, so digits-only works for account and last-4
+        name, last4, dob, acct = parse_identity(
+            user_text,
+            expect_acct=(v["step"]=="await_acct"),
+            expect_last4=(v["step"]=="await_last4"),
+        )
         if name: v["name"]=name
         if acct: v["acct"]=acct
         if last4: v["last4"]=last4
         if dob: v["dob"]=dob
 
         reply = None
-        # FSM verification — we NEVER call the model during verification
+        # FSM verification — NEVER call the model during verification
         if not v["ok"]:
             step = v["step"]
             if step == "await_name":
@@ -338,16 +352,30 @@ with right:
                 else:
                     reply="Please provide the last 4 digits of your debit card."
             elif step == "await_dob":
-                if v["dob"] and v["last4"] and v["name"]:
-                    ok, msg, rec = verify(v["name"], v["last4"], v["dob"])
-                    if ok:
-                        v["ok"]=True; v["record"]=rec; v["step"]="verified"; reply=f"{msg} How can I help you today?"
-                    else:
+                # If last-4 doesn't match the customer's record, push user back to the last-4 step
+                if v["name"] in CUSTOMERS:
+                    rec = CUSTOMERS[v["name"]]
+                    if v["last4"] and v["last4"] != rec["last4"]:
+                        v["last4"] = None
+                        v["step"] = "await_last4"
                         v["tries"] += 1
-                        reply = ("I’m sorry, I can’t verify your account right now. Please contact Bank of Shash support staff for further help."
-                                 if v["tries"]>=2 else msg)
-                else:
-                    reply="Please provide your date of birth (e.g., 3rd November 2000 or 03/11/2000)."
+                        reply = ("Hmm, the last 4 digits don’t match our records. Could you check and try again?"
+                                 if v["tries"] < 2 else
+                                 "I’m sorry, I can’t verify your account right now. Please contact Bank of Shash support staff for further help.")
+                if reply is None:
+                    if v["dob"] and v["last4"] and v["name"]:
+                        ok, msg, rec = verify(v["name"], v["last4"], v["dob"])
+                        if ok:
+                            v["ok"]=True; v["record"]=rec; v["step"]="verified"; reply=f"{msg} How can I help you today?"
+                        else:
+                            # If DOB is wrong, keep asking DOB; if name wrong (unlikely here), ask name again
+                            if "date of birth" in msg:
+                                reply = "Hmm, that date of birth doesn’t match our records. Please check and enter it again (e.g., 3rd November 2000 or 03/11/2000)."
+                            else:
+                                v["step"] = "await_name"
+                                reply = "I couldn’t find that customer. Please enter your full name exactly as on the account."
+                    else:
+                        reply="Please provide your date of birth (e.g., 3rd November 2000 or 03/11/2000)."
 
         # After verification, handle intents locally
         if v["ok"] and reply is None:
@@ -379,7 +407,6 @@ with right:
                 reply = "For security, please complete verification first."
 
         st.session_state.messages.append({"role":"assistant","content":reply})
-        # IMPORTANT: do not echo bubbles here; just rerun so the list renders in order
         st.rerun()
 
     st.markdown("</div>", unsafe_allow_html=True)
