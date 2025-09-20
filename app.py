@@ -1,7 +1,6 @@
 # app.py — Bank of Shash • Customer Support
 # Clean chat layout (no mixed ordering), verification FSM, readable buttons, rich banking content.
-# CHANGE: Validate last-4 immediately at 'await_last4' step (no advance on mismatch).
-# CHANGE: Remove DOB examples from the on-screen prompts.
+# FIX: DOB comparison now normalizes both sides (removes st/nd/rd/th etc.) so 3/11/2000 == 3rd November 2000.
 
 import re
 import streamlit as st
@@ -129,6 +128,13 @@ def human_dob(s:str)->str:
         return f"{int(d)} {MONTHS.get(mo.lower(), mo.lower())} {y}".lower()
     return s.lower()
 
+# NEW: normalize both sides for DOB equality (remove st/nd/rd/th, collapse spaces, lowercase)
+def clean_dob_text(s: str) -> str:
+    x = human_dob(s)  # ensures "3/11/2000" -> "3 november 2000"
+    x = re.sub(r"\b(\d{1,2})(?:st|nd|rd|th)\b", r"\1", x)  # remove ordinals if still present
+    x = re.sub(r"\s+", " ", x.strip().lower())
+    return x
+
 NAME_P  = r"(john\s*cena|sagar\s*karnik)"
 LAST4_P = r"(?:last\s*4\s*digits|last\s*four|\*\*\*\*|ending\s*in|last4)\D*(\d{4})"
 ACCT_P  = r"(?:account\s*number|acct\s*no\.?|a/c|account)\D*(\d{3,})"
@@ -169,7 +175,8 @@ def verify(name,last4,dob):
         return False,"I couldn’t find that customer. Please re-enter your full name exactly as on the account.",None
     issues=[]
     if last4 != rec["last4"]: issues.append("last 4 digits")
-    if norm(dob) != rec["dob"]: issues.append("date of birth")
+    # UPDATED: compare normalized DOBs (handles 3/11/2000 vs 3rd November 2000)
+    if clean_dob_text(dob) != clean_dob_text(rec["dob"]): issues.append("date of birth")
     if issues:
         return False,f"Hmm, the {', '.join(issues)} don’t match our records. Could you check and try again?",None
     return True,f"Thanks {rec['name']}, you’re verified.",rec
@@ -347,7 +354,7 @@ with right:
                     reply="Please share your account number."
             elif step == "await_last4":
                 if v["last4"]:
-                    # NEW: validate last-4 immediately against the named customer (if we have a name)
+                    # validate last-4 immediately against the named customer (if we have a name)
                     if v["name"] in CUSTOMERS and v["last4"] != CUSTOMERS[v["name"]]["last4"]:
                         v["last4"] = None
                         v["tries"] += 1
@@ -359,7 +366,7 @@ with right:
                 else:
                     reply="Please provide the last 4 digits of your debit card."
             elif step == "await_dob":
-                # If at DOB stage, we only check DOB now; last-4 already validated earlier
+                # At DOB stage, last-4 already validated
                 if v["dob"] and v["last4"] and v["name"]:
                     ok, msg, rec = verify(v["name"], v["last4"], v["dob"])
                     if ok:
