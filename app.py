@@ -1,13 +1,15 @@
-# app.py — Bank of Shash • Customer Support
-# Fixes: robust state init (no AttributeError), improved contrast, clearer inputs
-# Identity flow: name → account number → last4 → DOB (retry if wrong), matches your call-agent prompt
+# app.py — Bank of Shash • Customer Support (polished UI, chat layout fixed, readable buttons, richer content)
+# - Robust identity flow (name → account no. → last4 → DOB; retry if wrong)
+# - Dark professional theme with higher contrast + readable buttons
+# - Green Mortgage moving banner
+# - Rich banking content sections (Products, Digital Services, Security, FAQs, Service Status)
 
 import re
 import streamlit as st
 
-# ------------------------------
-# Page config
-# ------------------------------
+# ────────────────────────────────────────────────────────────────────────────────
+# Page config / constants
+# ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Bank of Shash • Customer Support",
     page_icon="🏦",
@@ -17,17 +19,13 @@ st.set_page_config(
 
 PHONE_NUMBER = "+35345933308"
 
-# ------------------------------
-# Hard-coded Azure OpenAI (optional)
-# ------------------------------
+# Hard-coded Azure OpenAI (optional; leave placeholders if not using)
 AZURE_OPENAI_ENDPOINT    = "https://testaisentiment.openai.azure.com/"
 AZURE_OPENAI_API_KEY     = "cb1c33772b3c4edab77db69ae18c9a43"
 AZURE_OPENAI_API_VERSION = "2024-02-15-preview"
 AZURE_OPENAI_DEPLOYMENT  = "aipocexploration"
 
-# ------------------------------
 # Hard-coded customers
-# ------------------------------
 CUSTOMERS = {
     "john cena": {
         "name": "John Cena",
@@ -45,80 +43,76 @@ CUSTOMERS = {
     },
 }
 
-# ------------------------------
-# Styles (higher contrast)
-# ------------------------------
-BG_DARK     = "#0b1220"     # page
-PANEL_DARK  = "#101827"     # card bg (brighter than before for readability)
-BORDER      = "#263246"     # card border
-TEXT_MAIN   = "#eef2f7"     # primary text (lighter)
-TEXT_SOFT   = "#9fb0c7"     # muted text
-PRIMARY     = "#22d3ee"     # cyan
-PRIMARY_D   = "#0fb5cf"
-ACCENT      = "#7c3aed"     # violet
-GOOD        = "#22c55e"
-WARN        = "#f59e0b"
-DANGER      = "#ef4444"
+# ────────────────────────────────────────────────────────────────────────────────
+# Styles (tuned for readability) + chat container fixes
+# ────────────────────────────────────────────────────────────────────────────────
+BG      = "#0b1220"   # page
+PANEL   = "#111827"   # card bg (lighter than before)
+BORDER  = "#22314a"   # border
+TEXT    = "#eef2f7"   # primary text
+MUTED   = "#9fb0c7"   # secondary text
+PRIMARY = "#22d3ee"   # cyan
+PRIMARY2= "#0fb5cf"
+ACCENT  = "#7c3aed"   # violet
+GOOD    = "#22c55e"
+WARN    = "#f59e0b"
+DANGER  = "#ef4444"
 
 st.markdown(
     f"""
     <style>
       html, body, .block-container {{
-        background: {BG_DARK};
-        color: {TEXT_MAIN};
+        background:{BG}; color:{TEXT};
       }}
       .card {{
-        background: {PANEL_DARK};
-        border: 1px solid {BORDER};
-        border-radius: 16px;
-        padding: 18px;
-        box-shadow: 0 12px 34px rgba(3,12,24,0.45);
+        background:{PANEL}; border:1px solid {BORDER};
+        border-radius:16px; padding:18px; box-shadow:0 10px 30px rgba(3,12,24,.45);
       }}
-      .headline {{
-        font-size: 2.0rem; font-weight: 800; letter-spacing:-0.02em;
-      }}
-      .soft {{ color: {TEXT_SOFT}; }}
+      .headline {{ font-size:2rem; font-weight:800; letter-spacing:-.02em; }}
+      .soft {{ color:{MUTED}; }}
       .pill {{
-        display:inline-flex; align-items:center; gap:8px;
-        padding: 6px 12px; border-radius: 999px; font-size: 0.85rem;
-        background: rgba(34,211,238,0.12); color: {PRIMARY};
-        border: 1px solid rgba(34,211,238,0.28);
+        display:inline-flex; align-items:center; gap:8px; padding:6px 12px;
+        border-radius:999px; font-size:.85rem; background:rgba(34,211,238,.12);
+        color:{PRIMARY}; border:1px solid rgba(34,211,238,.28);
       }}
-      .btn {{
-        display:inline-block; padding: 10px 14px; border-radius:12px;
-        background: linear-gradient(180deg, {PRIMARY} 0%, {PRIMARY_D} 100%);
-        color:#001016; text-decoration:none !important; font-weight:700;
-        box-shadow: 0 6px 18px rgba(34,211,238,0.18);
+      /* Make ALL streamlit buttons readable */
+      .stButton>button {{
+        background:#1f2937; color:{TEXT}; border:1px solid {BORDER};
+        border-radius:10px; font-weight:700; padding:.6rem 1rem;
       }}
-      .btn:active {{ transform: translateY(1px); }}
-      .good {{ color: {GOOD}; font-weight:700; }}
-      .warn {{ color: {WARN}; font-weight:700; }}
-      .danger {{ color: {DANGER}; font-weight:700; }}
+      .stButton>button:hover {{
+        background:linear-gradient(180deg,{PRIMARY} 0%, {PRIMARY2} 100%); color:#001016; border:0;
+        box-shadow:0 6px 18px rgba(34,211,238,.18);
+      }}
       /* Ticker */
       .ticker-wrap {{
-        width: 100%; overflow: hidden;
-        background: #0d3b37; border: 1px solid #115e56;
-        border-radius: 14px; padding: 8px 0; margin: 10px 0 16px 0;
+        width:100%; overflow:hidden; background:#0d3b37; border:1px solid #115e56;
+        border-radius:14px; padding:8px 0; margin:10px 0 16px 0;
       }}
-      .ticker {{ display: inline-block; white-space: nowrap; animation: scroll-left 18s linear infinite; font-weight: 600; }}
-      .ticker a {{ color: {PRIMARY}; text-decoration: none; }}
-      @keyframes scroll-left {{ 0% {{ transform: translateX(100%); }} 100% {{ transform: translateX(-100%); }} }}
-      /* Inputs / chat */
-      div[data-baseweb="input"] input, .stTextInput>div>div>input, .stTextArea textarea {{
-        background:{BG_DARK}; color:{TEXT_MAIN}; border:1px solid {BORDER};
+      .ticker {{ display:inline-block; white-space:nowrap; animation:scroll-left 18s linear infinite; font-weight:600; }}
+      .ticker a {{ color:{PRIMARY}; text-decoration:none; }}
+      @keyframes scroll-left {{ 0% {{transform:translateX(100%);}} 100% {{transform:translateX(-100%);}} }}
+      /* Inputs & chat bubbles */
+      /* Chat area container to prevent messages escaping card bounds */
+      .chat-wrap {{
+        background:{PANEL}; border:1px solid {BORDER}; border-radius:16px; padding:0;
       }}
+      div[data-testid="stChatMessage"] {{
+        margin-left:0 !important; margin-right:0 !important;  /* align bubbles with container */
+      }}
+      /* Chat input field contrast */
       div[data-testid="stChatInput"] textarea {{
-        background:{BG_DARK} !important; color:{TEXT_MAIN} !important; border:1px solid {BORDER} !important;
+        background:#0c1423 !important; color:{TEXT} !important; border:1px solid {BORDER} !important;
       }}
-      .stChatMessage .stMarkdown p {{ color: {TEXT_MAIN}; }}
+      .stChatMessage .stMarkdown p {{ color:{TEXT}; }}
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
-# ------------------------------
+# ────────────────────────────────────────────────────────────────────────────────
 # LLM client (optional)
-# ------------------------------
+# ────────────────────────────────────────────────────────────────────────────────
 OPENAI_OK = True
 client = None
 try:
@@ -145,76 +139,59 @@ def ask_gpt(messages, temperature: float = 0.2, max_tokens: int = 700) -> str:
     except Exception as e:
         return f"(Error calling Azure OpenAI: {e})"
 
-# ------------------------------
-# System prompt (your call-agent prompt mirrored)
-# ------------------------------
+# ────────────────────────────────────────────────────────────────────────────────
+# System prompt (your call-agent prompt mirrored for chat)
+# ────────────────────────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """🧾 Identity & Purpose
 You are Sam, a friendly, professional, and knowledgeable virtual banking assistant for Bank of Shash.
 You assist customers with inquiries, account services, card issues (like fraud or stolen cards), and appointment scheduling.
 Always answer in GMT timezone. Bank of Shash branch is open 9 AM – 5 PM GMT.
 
 👥 Hard-Coded Customers
-John Cena
-Last 4 digits of debit card: 1234
-Date of birth: 3rd November 2000
-Account balance: €2000
-Lost/Stolen card flow: Always active
-
-Sagar Karnik
-Last 4 digits of debit card: 5678
-Date of birth: 3rd December 2005
-Account balance: €2500
-Fraud queries: May or may not call — handle with standard fraud-protection flow
+John Cena — Last 4: 1234 — DOB: 3rd November 2000 — Balance: €2000 — Lost/Stolen flow: always active
+Sagar Karnik — Last 4: 5678 — DOB: 3rd December 2005 — Balance: €2500 — Fraud: standard flow
 
 🔐 Verification Flow
-Before disclosing any account info or taking action:
-1) Ask for full name.
-2) Ask for account number (any number is accepted for flow).
-3) Ask for last 4 digits of debit card.
-   - If mismatch → say: “Hmm, the digits don’t match our records. Could you check and try again?”
-   - Allow retry.
-   - If still incorrect → stop politely: “I’m sorry, I can’t verify your account right now. Please contact Bank of Shash support staff for further help.”
-4) Ask for date of birth.
+Ask for: full name → account number (any number accepted for flow) → last 4 digits → date of birth.
+If mismatch say: “Hmm, the digits don’t match our records. Could you check and try again?” Allow retry once.
+If still incorrect: “I’m sorry, I can’t verify your account right now. Please contact Bank of Shash support staff for further help.”
 Only proceed if verified.
 
 🎤 Introduction
 “Hello! This is Sam from Bank of Shash. How can I assist you today?”
 
 📞 Conversation Flow
-1) General Inquiry Handling — Answer questions about account services, balances, or branch info. If more help is needed → recommend appointment with advisor.
-2) Account Balance Inquiry — If John Cena: “Your balance is €2000.” If Sagar Karnik: “Your balance is €2500.”
-3) Card Lost/Stolen Handling (John Cena special)
-   - Empathy; verify; mention last known activity (Camden Street / O’Brian’s Pub); secure account.
-4) Fraud Handling (Sagar/General) — Empathy; verify; reassure protection.
-5) Appointment Booking — Collect first name, email, account type; check availability; confirm/offer two alternatives.
+1) General info & branch hours; suggest advisor appointment if needed.
+2) Balance: John = €2000, Sagar = €2500.
+3) Lost/Stolen (John special): empathy; mention Camden Street / O’Brian’s Pub last activity; secure account.
+4) Fraud (Sagar/general): empathy; verify; reassure funds protected; block/monitor/replace.
+5) Appointment: collect first name, email, account type; check availability; confirm or suggest alternatives.
 
-✅ Resolution & Closing
-• John: closing + gentle upsell (mortgage/car loan).
-• Sagar: closing + gentle upsell (student loan/credit card).
-• Failed verification after retry: provide the polite stop message.
+✅ Closing & Upsell
+John → upsell mortgage or car loan.  Sagar → upsell student loan or credit card.
 
 📌 Guardrails
-• Only banking topics. Never disclose info without full verification. Stay calm, respectful, professional.
+Banking topics only. Never disclose info without full verification. Stay calm, respectful, professional.
 """
 
-# ------------------------------
+# ────────────────────────────────────────────────────────────────────────────────
 # Identity parsing & validation
-# ------------------------------
-NAME_PATTERN  = r"(john\\s*cena|sagar\\s*karnik)"
-LAST4_PATTERN = r"(?:last\\s*4\\s*digits|last\\s*four|\\*\\*\\*\\*|ending\\s*in|last4)\\D*(\\d{{4}})"
-DOB_PATTERN   = r"(\\d{{1,2}}(?:st|nd|rd|th)?\\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|"
-DOB_PATTERN  += r"january|february|march|april|june|july|august|september|october|november|december)\\s+\\d{{4}})"
-ACCT_PATTERN  = r"(?:account\\s*number|acct\\s*no\\.?|a/c|account)\\D*(\\d{3,})"
+# ────────────────────────────────────────────────────────────────────────────────
+NAME_P   = r"(john\\s*cena|sagar\\s*karnik)"
+LAST4_P  = r"(?:last\\s*4\\s*digits|last\\s*four|\\*\\*\\*\\*|ending\\s*in|last4)\\D*(\\d{{4}})"
+DOB_P1   = r"(\\d{{1,2}}(?:st|nd|rd|th)?\\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|"
+DOB_P1  += r"january|february|march|april|june|july|august|september|october|november|december)\\s+\\d{{4}})"
+ACCT_P   = r"(?:account\\s*number|acct\\s*no\\.?|a/c|account)\\D*(\\d{3,})"
 
 def _norm(s: str) -> str:
     return re.sub(r"\\s+", " ", s.strip().lower())
 
 def parse_identity(text: str):
     t = text.lower()
-    name = re.search(NAME_PATTERN, t)
-    last4 = re.search(LAST4_PATTERN, t)
-    dob = re.search(DOB_PATTERN, t, flags=re.IGNORECASE)
-    acct = re.search(ACCT_PATTERN, t)
+    name = re.search(NAME_P, t)
+    last4 = re.search(LAST4_P, t)
+    dob = re.search(DOB_P1, t, flags=re.IGNORECASE)
+    acct = re.search(ACCT_P, t)
     return (
         " ".join(name.group(1).split()) if name else None,
         last4.group(1) if last4 else None,
@@ -245,9 +222,9 @@ def verify(name, last4, dob):
 
     return True, f"Thanks {rec['name']}, you’re verified.", rec
 
-# ------------------------------
-# Safe state init (prevents AttributeError)
-# ------------------------------
+# ────────────────────────────────────────────────────────────────────────────────
+# Safe state init (prevents AttributeError) + helpers
+# ────────────────────────────────────────────────────────────────────────────────
 def ensure_state():
     if "messages" not in st.session_state:
         st.session_state["messages"] = [
@@ -260,11 +237,11 @@ def ensure_state():
 
 ensure_state()
 
-# ------------------------------
+# ────────────────────────────────────────────────────────────────────────────────
 # Header + Ticker
-# ------------------------------
-hdr_l, hdr_r = st.columns([0.75, 0.25])
-with hdr_l:
+# ────────────────────────────────────────────────────────────────────────────────
+hl, hr = st.columns([0.75, 0.25])
+with hl:
     st.markdown(
         f"""
         <div style="display:flex; gap:14px; align-items:center;">
@@ -272,14 +249,11 @@ with hdr_l:
           <div class="headline">Bank of Shash — Customer Support</div>
           <span class="pill">● Live</span>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """, unsafe_allow_html=True
     )
-with hdr_r:
-    st.markdown(
-        f'<div style="text-align:right;"><a class="btn" href="tel:{PHONE_NUMBER}">📞 Call {PHONE_NUMBER}</a></div>',
-        unsafe_allow_html=True,
-    )
+with hr:
+    st.markdown(f'<div style="text-align:right;"><a class="btn" href="tel:{PHONE_NUMBER}">📞 Call {PHONE_NUMBER}</a></div>',
+                unsafe_allow_html=True)
 
 st.markdown(
     f"""
@@ -291,15 +265,15 @@ st.markdown(
         &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; 💡 Ask in chat: “Tell me about Green Mortgage eligibility.”
       </div>
     </div>
-    """,
-    unsafe_allow_html=True,
+    """, unsafe_allow_html=True
 )
 
-# ------------------------------
-# Layout
-# ------------------------------
+# ────────────────────────────────────────────────────────────────────────────────
+# Main layout
+# ────────────────────────────────────────────────────────────────────────────────
 left, right = st.columns([0.52, 0.48])
 
+# LEFT: Help Center + Rich Banking Content
 with left:
     st.markdown(
         """
@@ -307,8 +281,7 @@ with left:
           <div style="font-weight:800; font-size:1.15rem;">Help Center</div>
           <div class="soft" style="margin-top:4px;">Choose a quick action or ask in chat.</div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """, unsafe_allow_html=True
     )
     a, b, c = st.columns(3)
     with a:
@@ -327,6 +300,66 @@ with left:
                 "Tell me about Green Mortgage eligibility and rates."})
             st.rerun()
 
+    # Products grid
+    st.markdown(
+        f"""
+        <div class="card" style="margin-top:14px;">
+          <div style="font-weight:800; font-size:1.15rem;">Personal Banking Products</div>
+          <div class="soft">Explore our most popular services.</div>
+          <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:12px;">
+            <div style="background:#0d1526; border:1px solid {BORDER}; border-radius:14px; padding:12px;">
+              <div style="font-weight:700;">Current Account</div>
+              <div class="soft">No monthly fees with minimum balance. Instant notifications.</div>
+            </div>
+            <div style="background:#0d1526; border:1px solid {BORDER}; border-radius:14px; padding:12px;">
+              <div style="font-weight:700;">Savings Plus</div>
+              <div class="soft">Competitive variable rate, flexible withdrawals.</div>
+            </div>
+            <div style="background:#0d1526; border:1px solid {BORDER}; border-radius:14px; padding:12px;">
+              <div style="font-weight:700;">Visa Credit Card</div>
+              <div class="soft">0% FX fees on online purchases for first 90 days.</div>
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True
+    )
+
+    # Digital services
+    st.markdown(
+        f"""
+        <div class="card" style="margin-top:14px;">
+          <div style="font-weight:800; font-size:1.15rem;">Digital Banking</div>
+          <div class="soft">Everything you need, right from your phone.</div>
+          <ul class="soft" style="margin-top:8px;">
+            <li>Mobile app with biometric login</li>
+            <li>Virtual cards for secure online payments</li>
+            <li>Instant transfers & bill payments</li>
+            <li>Spending insights and budgeting</li>
+          </ul>
+        </div>
+        """, unsafe_allow_html=True
+    )
+
+    # Security + status
+    st.markdown(
+        f"""
+        <div class="card" style="margin-top:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800; font-size:1.15rem;">Security Center</div>
+            <div class="pill">● Systems Operational</div>
+          </div>
+          <div class="soft" style="margin-top:6px;">Never share full card numbers, passwords or OTPs. We’ll never ask for them.</div>
+        </div>
+        """, unsafe_allow_html=True
+    )
+
+    # FAQs
+    with st.expander("Frequently Asked Questions"):
+        st.markdown("- **How do I freeze my card?** Use chat to confirm identity or call our agent. We can freeze instantly.")
+        st.markdown("- **What are branch hours?** 9 AM – 5 PM GMT.")
+        st.markdown("- **Green Mortgage?** Preferential rates for energy-efficient homes (BER A/B).")
+
+# RIGHT: Chat (wrapped in its own container to keep bubbles inside)
 with right:
     st.markdown(
         f"""
@@ -337,11 +370,12 @@ with right:
           </div>
           <div class="soft">Do not share full card numbers or passwords. Answers in GMT. Branch hours: 9 AM – 5 PM GMT.</div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """, unsafe_allow_html=True
     )
 
-    # render history (skip system)
+    # Chat container fixes overflow/spacing
+    st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+    # Render history (skip system)
     for m in st.session_state.messages[1:]:
         with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
             st.write(m["content"])
@@ -352,7 +386,7 @@ with right:
         with st.chat_message("user"):
             st.write(user_text)
 
-        # identity capture
+        # Identity capture
         name, last4, dob, acct = parse_identity(user_text)
         v = st.session_state.verif
         if name:  v["name"]  = name
@@ -362,7 +396,7 @@ with right:
 
         reply = None
 
-        # Need verification for account-specific topics
+        # Require verification for sensitive intents
         needs_verif = any(k in user_text.lower() for k in ["balance", "lost", "stolen", "fraud", "card", "account"])
         if not v["ok"] and needs_verif:
             if not v["name"]:
@@ -398,7 +432,7 @@ with right:
                     reply = (
                         "I’m really sorry to hear about your card. That can be stressful — let’s take care of this together.\n\n"
                         "Looking at your recent activity… I see your last transaction was on Camden Street, at O’Brian’s Pub.\n"
-                        f"While we’re checking if it was left behind, I’ll secure your account. Your card ending {rec['last4']} is now blocked and a replacement has been ordered."
+                        f"While we’re checking if it was left behind, I’ve secured your account. Your card ending {rec['last4']} is now blocked and a replacement has been ordered."
                     )
                 else:
                     reply = (
@@ -412,7 +446,7 @@ with right:
                 reply = ("Happy to help with an appointment. Please share your first name, email, and account type. "
                          "I’ll check availability and confirm or offer two alternative slots.")
 
-        # Model or fallback for general Q&A
+        # Model or fallback
         if reply is None:
             model_out = ask_gpt(st.session_state.messages)
             if model_out.startswith("("):
@@ -423,6 +457,8 @@ with right:
         st.session_state.messages.append({"role":"assistant","content":reply})
         with st.chat_message("assistant"):
             st.write(reply)
+
+    st.markdown('</div>', unsafe_allow_html=True)  # close chat-wrap
 
 # Footer
 st.markdown("<hr style='border-color:#1f2937;'>", unsafe_allow_html=True)
