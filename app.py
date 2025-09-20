@@ -1,13 +1,13 @@
 # app.py — Bank of Shash • Customer Support
-# Dark professional UI + Green Mortgage banner + chat agent using your exact prompt
-# Identity verification with retry (Full name → account number → last 4 → DOB)
+# Fixes: robust state init (no AttributeError), improved contrast, clearer inputs
+# Identity flow: name → account number → last4 → DOB (retry if wrong), matches your call-agent prompt
 
 import re
 import streamlit as st
 
-# =========================
-# PAGE CONFIG / CONSTANTS
-# =========================
+# ------------------------------
+# Page config
+# ------------------------------
 st.set_page_config(
     page_title="Bank of Shash • Customer Support",
     page_icon="🏦",
@@ -17,13 +17,17 @@ st.set_page_config(
 
 PHONE_NUMBER = "+35345933308"
 
-# ---- Hard-coded Azure OpenAI (replace placeholders) ----
+# ------------------------------
+# Hard-coded Azure OpenAI (optional)
+# ------------------------------
 AZURE_OPENAI_ENDPOINT    = "https://testaisentiment.openai.azure.com/"
 AZURE_OPENAI_API_KEY     = "cb1c33772b3c4edab77db69ae18c9a43"
 AZURE_OPENAI_API_VERSION = "2024-02-15-preview"
 AZURE_OPENAI_DEPLOYMENT  = "aipocexploration"
 
-# ---- Hard-coded customers ----
+# ------------------------------
+# Hard-coded customers
+# ------------------------------
 CUSTOMERS = {
     "john cena": {
         "name": "John Cena",
@@ -37,23 +41,24 @@ CUSTOMERS = {
         "last4": "5678",
         "dob": "3rd december 2005",
         "balance": 2500.00,
-        "lost_stolen_active": True,  # fraud may or may not occur; handled in flow
+        "lost_stolen_active": True,  # fraud may/may not; handled in flow
     },
 }
 
-# =========================
-# STYLES (polished, dark)
-# =========================
-BG_DARK     = "#0b1220"
-PANEL_DARK  = "#0f172a"
-BORDER      = "#1e293b"
-TEXT_MAIN   = "#e5e7eb"
-TEXT_SOFT   = "#94a3b8"
-PRIMARY     = "#22d3ee"
-PRIMARY_D   = "#06b6d4"
-ACCENT      = "#7c3aed"
+# ------------------------------
+# Styles (higher contrast)
+# ------------------------------
+BG_DARK     = "#0b1220"     # page
+PANEL_DARK  = "#101827"     # card bg (brighter than before for readability)
+BORDER      = "#263246"     # card border
+TEXT_MAIN   = "#eef2f7"     # primary text (lighter)
+TEXT_SOFT   = "#9fb0c7"     # muted text
+PRIMARY     = "#22d3ee"     # cyan
+PRIMARY_D   = "#0fb5cf"
+ACCENT      = "#7c3aed"     # violet
 GOOD        = "#22c55e"
 WARN        = "#f59e0b"
+DANGER      = "#ef4444"
 
 st.markdown(
     f"""
@@ -65,9 +70,9 @@ st.markdown(
       .card {{
         background: {PANEL_DARK};
         border: 1px solid {BORDER};
-        border-radius: 18px;
+        border-radius: 16px;
         padding: 18px;
-        box-shadow: 0 12px 40px rgba(2,6,23,0.45);
+        box-shadow: 0 12px 34px rgba(3,12,24,0.45);
       }}
       .headline {{
         font-size: 2.0rem; font-weight: 800; letter-spacing:-0.02em;
@@ -75,46 +80,35 @@ st.markdown(
       .soft {{ color: {TEXT_SOFT}; }}
       .pill {{
         display:inline-flex; align-items:center; gap:8px;
-        padding: 6px 12px;
-        border-radius: 999px;
-        font-size: 0.85rem;
-        background: rgba(34,211,238,0.14);
-        color: {PRIMARY};
+        padding: 6px 12px; border-radius: 999px; font-size: 0.85rem;
+        background: rgba(34,211,238,0.12); color: {PRIMARY};
         border: 1px solid rgba(34,211,238,0.28);
       }}
       .btn {{
         display:inline-block; padding: 10px 14px; border-radius:12px;
         background: linear-gradient(180deg, {PRIMARY} 0%, {PRIMARY_D} 100%);
         color:#001016; text-decoration:none !important; font-weight:700;
-        box-shadow: 0 6px 20px rgba(34,211,238,0.18);
+        box-shadow: 0 6px 18px rgba(34,211,238,0.18);
       }}
       .btn:active {{ transform: translateY(1px); }}
       .good {{ color: {GOOD}; font-weight:700; }}
       .warn {{ color: {WARN}; font-weight:700; }}
+      .danger {{ color: {DANGER}; font-weight:700; }}
+      /* Ticker */
       .ticker-wrap {{
-        width: 100%;
-        overflow: hidden;
-        background: rgba(12, 83, 74, 0.35);
-        border: 1px solid #0e4b48;
-        border-radius: 14px;
-        padding: 8px 0;
-        margin: 10px 0 16px 0;
+        width: 100%; overflow: hidden;
+        background: #0d3b37; border: 1px solid #115e56;
+        border-radius: 14px; padding: 8px 0; margin: 10px 0 16px 0;
       }}
-      .ticker {{
-        display: inline-block;
-        white-space: nowrap;
-        animation: scroll-left 18s linear infinite;
-        font-weight: 600;
-      }}
+      .ticker {{ display: inline-block; white-space: nowrap; animation: scroll-left 18s linear infinite; font-weight: 600; }}
       .ticker a {{ color: {PRIMARY}; text-decoration: none; }}
-      @keyframes scroll-left {{
-        0%   {{ transform: translateX(100%); }}
-        100% {{ transform: translateX(-100%); }}
+      @keyframes scroll-left {{ 0% {{ transform: translateX(100%); }} 100% {{ transform: translateX(-100%); }} }}
+      /* Inputs / chat */
+      div[data-baseweb="input"] input, .stTextInput>div>div>input, .stTextArea textarea {{
+        background:{BG_DARK}; color:{TEXT_MAIN}; border:1px solid {BORDER};
       }}
-      .stTextInput>div>div>input, .stTextArea textarea {{
-        background:{PANEL_DARK};
-        color:{TEXT_MAIN};
-        border:1px solid {BORDER};
+      div[data-testid="stChatInput"] textarea {{
+        background:{BG_DARK} !important; color:{TEXT_MAIN} !important; border:1px solid {BORDER} !important;
       }}
       .stChatMessage .stMarkdown p {{ color: {TEXT_MAIN}; }}
     </style>
@@ -122,9 +116,9 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# =========================
-# LLM CLIENT (optional)
-# =========================
+# ------------------------------
+# LLM client (optional)
+# ------------------------------
 OPENAI_OK = True
 client = None
 try:
@@ -151,9 +145,9 @@ def ask_gpt(messages, temperature: float = 0.2, max_tokens: int = 700) -> str:
     except Exception as e:
         return f"(Error calling Azure OpenAI: {e})"
 
-# =========================
-# SYSTEM PROMPT (your exact call-agent prompt mirrored for chat)
-# =========================
+# ------------------------------
+# System prompt (your call-agent prompt mirrored)
+# ------------------------------
 SYSTEM_PROMPT = """🧾 Identity & Purpose
 You are Sam, a friendly, professional, and knowledgeable virtual banking assistant for Bank of Shash.
 You assist customers with inquiries, account services, card issues (like fraud or stolen cards), and appointment scheduling.
@@ -189,39 +183,30 @@ Only proceed if verified.
 📞 Conversation Flow
 1) General Inquiry Handling — Answer questions about account services, balances, or branch info. If more help is needed → recommend appointment with advisor.
 2) Account Balance Inquiry — If John Cena: “Your balance is €2000.” If Sagar Karnik: “Your balance is €2500.”
-3) Card Lost/Stolen Handling (Special for John Cena, Still Active)
-   - Empathy: “I’m really sorry to hear about your card. That can be stressful — let’s take care of this together.”
-   - Verify identity (full flow).
-   - Last known activity: “Looking at your recent activity… I see your last transaction was on Camden Street, at O’Brian’s Pub.”
-   - Secure account: “While we’re checking if it was left behind, I’ll go ahead and secure your account to keep your money safe.”
-4) Fraud Handling (For Sagar Karnik or general fraud queries)
-   - Empathy: “I’m really sorry to hear about this — fraud concerns are serious. Let’s work through this together.”
-   - Verify identity.
-   - Reassure: “Don’t worry — we’ll block your card, monitor unusual activity, and order a replacement if needed. Your funds are protected.”
-5) Appointment Booking
-   - If user requests an appointment: collect first name, email, account type; check availability; confirm or offer two alternatives.
+3) Card Lost/Stolen Handling (John Cena special)
+   - Empathy; verify; mention last known activity (Camden Street / O’Brian’s Pub); secure account.
+4) Fraud Handling (Sagar/General) — Empathy; verify; reassure protection.
+5) Appointment Booking — Collect first name, email, account type; check availability; confirm/offer two alternatives.
 
 ✅ Resolution & Closing
-• For John Cena: closing + gentle upsell (mortgage or car loan).
-• For Sagar Karnik: closing + gentle upsell (student loan or credit card).
-• For failed verification after retry: “I’m sorry, I can’t verify your account right now. Please contact Bank of Shash support staff for further help.”
+• John: closing + gentle upsell (mortgage/car loan).
+• Sagar: closing + gentle upsell (student loan/credit card).
+• Failed verification after retry: provide the polite stop message.
 
 📌 Guardrails
-• If asked about non-banking topics → “I’m sorry, I don’t have information about that. I can only support you with banking services.”
-• Never disclose account info without full verification.
-• Always remain calm, respectful, professional.
+• Only banking topics. Never disclose info without full verification. Stay calm, respectful, professional.
 """
 
-# =========================
-# SIMPLE EXTRACTION / VALIDATION
-# =========================
-NAME_PATTERN   = r"(john\\s*cena|sagar\\s*karnik)"
-LAST4_PATTERN  = r"(?:last\\s*4\\s*digits|last\\s*four|\\*\\*\\*\\*|ending\\s*in|last4)\\D*(\\d{{4}})"
-DOB_PATTERN    = r"(\\d{{1,2}}(?:st|nd|rd|th)?\\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|"
-DOB_PATTERN   += r"january|february|march|april|june|july|august|september|october|november|december)\\s+\\d{{4}})"
-ACCT_PATTERN   = r"(?:account\\s*number|acct\\s*no\\.?|a/c|account)\\D*(\\d{3,})"
+# ------------------------------
+# Identity parsing & validation
+# ------------------------------
+NAME_PATTERN  = r"(john\\s*cena|sagar\\s*karnik)"
+LAST4_PATTERN = r"(?:last\\s*4\\s*digits|last\\s*four|\\*\\*\\*\\*|ending\\s*in|last4)\\D*(\\d{{4}})"
+DOB_PATTERN   = r"(\\d{{1,2}}(?:st|nd|rd|th)?\\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|"
+DOB_PATTERN  += r"january|february|march|april|june|july|august|september|october|november|december)\\s+\\d{{4}})"
+ACCT_PATTERN  = r"(?:account\\s*number|acct\\s*no\\.?|a/c|account)\\D*(\\d{3,})"
 
-def norm(s: str) -> str:
+def _norm(s: str) -> str:
     return re.sub(r"\\s+", " ", s.strip().lower())
 
 def parse_identity(text: str):
@@ -233,7 +218,7 @@ def parse_identity(text: str):
     return (
         " ".join(name.group(1).split()) if name else None,
         last4.group(1) if last4 else None,
-        norm(dob.group(0)) if dob else None,
+        _norm(dob.group(0)) if dob else None,
         acct.group(1) if acct else None,
     )
 
@@ -252,7 +237,7 @@ def verify(name, last4, dob):
     issues = []
     if last4 != rec["last4"]:
         issues.append("last 4 digits")
-    if norm(dob) != rec["dob"]:
+    if _norm(dob) != rec["dob"]:
         issues.append("date of birth")
 
     if issues:
@@ -260,9 +245,24 @@ def verify(name, last4, dob):
 
     return True, f"Thanks {rec['name']}, you’re verified.", rec
 
-# =========================
-# HEADER + BANNER
-# =========================
+# ------------------------------
+# Safe state init (prevents AttributeError)
+# ------------------------------
+def ensure_state():
+    if "messages" not in st.session_state:
+        st.session_state["messages"] = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "assistant", "content": "Hello! This is Sam from Bank of Shash. How can I assist you today?"}
+        ]
+    if "verif" not in st.session_state:
+        st.session_state["verif"] = {"name": None, "acct": None, "last4": None, "dob": None,
+                                     "attempts": 0, "ok": False, "record": None}
+
+ensure_state()
+
+# ------------------------------
+# Header + Ticker
+# ------------------------------
 hdr_l, hdr_r = st.columns([0.75, 0.25])
 with hdr_l:
     st.markdown(
@@ -288,17 +288,16 @@ st.markdown(
         🌱 We have introduced <b>Green Mortgage</b> with preferential rates for energy-efficient homes —
         <a href="#" onclick="return false;">click here to learn more</a>
         or call <a href="tel:{PHONE_NUMBER}">{PHONE_NUMBER}</a> to talk to our agent.
-        &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
-        💡 Ask in chat: “Tell me about Green Mortgage eligibility.”
+        &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; 💡 Ask in chat: “Tell me about Green Mortgage eligibility.”
       </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-# =========================
-# LAYOUT
-# =========================
+# ------------------------------
+# Layout
+# ------------------------------
 left, right = st.columns([0.52, 0.48])
 
 with left:
@@ -311,22 +310,19 @@ with left:
         """,
         unsafe_allow_html=True,
     )
-    c1, c2, c3 = st.columns(3)
-    with c1:
+    a, b, c = st.columns(3)
+    with a:
         if st.button("Report Lost/Stolen", use_container_width=True):
-            st.session_state.setdefault("messages", [])
             st.session_state.messages.append({"role":"user","content":
                 "My name is John Cena. Account number 12345678. Last 4 digits 1234. DOB 3rd November 2000. I lost my card."})
             st.rerun()
-    with c2:
+    with b:
         if st.button("Check Balance", use_container_width=True):
-            st.session_state.setdefault("messages", [])
             st.session_state.messages.append({"role":"user","content":
                 "My name is Sagar Karnik. Account no 999001. Last four 5678. DOB 3rd December 2005. What is my balance?"})
             st.rerun()
-    with c3:
+    with c:
         if st.button("Green Mortgage", use_container_width=True):
-            st.session_state.setdefault("messages", [])
             st.session_state.messages.append({"role":"user","content":
                 "Tell me about Green Mortgage eligibility and rates."})
             st.rerun()
@@ -339,21 +335,13 @@ with right:
             <div style="font-weight:800; font-size:1.15rem;">💬 Secure Chat</div>
             <a class="pill" href="tel:{PHONE_NUMBER}">Or call {PHONE_NUMBER}</a>
           </div>
-          <div class="soft">Do not share full card numbers or passwords here. Answers in GMT. Branch hours: 9 AM – 5 PM GMT.</div>
+          <div class="soft">Do not share full card numbers or passwords. Answers in GMT. Branch hours: 9 AM – 5 PM GMT.</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # Initialize chat with your system prompt
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "assistant", "content": "Hello! This is Sam from Bank of Shash. How can I assist you today?"}
-        ]
-        st.session_state.verif = {"name": None, "acct": None, "last4": None, "dob": None, "attempts": 0, "ok": False}
-
-    # Render history (skip system)
+    # render history (skip system)
     for m in st.session_state.messages[1:]:
         with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
             st.write(m["content"])
@@ -364,7 +352,7 @@ with right:
         with st.chat_message("user"):
             st.write(user_text)
 
-        # --- Identity capture / sequential prompts per your flow ---
+        # identity capture
         name, last4, dob, acct = parse_identity(user_text)
         v = st.session_state.verif
         if name:  v["name"]  = name
@@ -374,7 +362,7 @@ with right:
 
         reply = None
 
-        # If user asks account-specific stuff but verification not complete, guide step-by-step
+        # Need verification for account-specific topics
         needs_verif = any(k in user_text.lower() for k in ["balance", "lost", "stolen", "fraud", "card", "account"])
         if not v["ok"] and needs_verif:
             if not v["name"]:
@@ -397,22 +385,21 @@ with right:
                         reply = ("I’m sorry, I can’t verify your account right now. "
                                  "Please contact Bank of Shash support staff for further help.")
                     else:
-                        reply = msg  # “digits don’t match… try again”
-        # If verified, handle intents locally in line with the prompt
+                        reply = msg  # ask to verify again
+
+        # If verified, handle key intents locally
         if v["ok"] and reply is None:
-            low = user_text.lower()
             rec = v["record"]
+            low = user_text.lower()
             if "balance" in low:
-                amt = CUSTOMERS[rec["name"].lower()]["balance"]
-                reply = f"Your balance is €{amt:.0f}."
+                reply = f"Your balance is €{CUSTOMERS[rec['name'].lower()]['balance']:.0f}."
             elif "lost" in low or "stolen" in low or ("card" in low and "block" in low):
                 if rec["name"] == "John Cena":
                     reply = (
                         "I’m really sorry to hear about your card. That can be stressful — let’s take care of this together.\n\n"
                         "Looking at your recent activity… I see your last transaction was on Camden Street, at O’Brian’s Pub.\n"
-                        "While we’re checking if it was left behind, I’ll go ahead and secure your account to keep your money safe. "
-                        "Your card ending in {last4} is now blocked and a replacement will be dispatched."
-                    ).format(last4=rec["last4"])
+                        f"While we’re checking if it was left behind, I’ll secure your account. Your card ending {rec['last4']} is now blocked and a replacement has been ordered."
+                    )
                 else:
                     reply = (
                         "I’m really sorry to hear about this — fraud concerns are serious. Let’s work through this together. "
@@ -420,22 +407,16 @@ with right:
                     )
             elif "mortgage" in low:
                 reply = ("Our Green Mortgage offers preferential rates for energy-efficient homes. "
-                         "If you’d like, I can book you with an advisor, or you can call us at "
-                         f"{PHONE_NUMBER}.")
+                         f"I can book you with an advisor, or you can call us at {PHONE_NUMBER}.")
             elif "appointment" in low or "book" in low:
                 reply = ("Happy to help with an appointment. Please share your first name, email, and account type. "
                          "I’ll check availability and confirm or offer two alternative slots.")
-            elif "hours" in low or "time" in low:
-                reply = "We answer in GMT. Our branch is open 9 AM – 5 PM GMT."
-            else:
-                reply = None  # let model or fallback answer
 
-        # LLM or fallback for general Q&A and guardrails
+        # Model or fallback for general Q&A
         if reply is None:
             model_out = ask_gpt(st.session_state.messages)
             if model_out.startswith("("):
-                reply = ("I can help with banking services only. "
-                         f"If you need immediate assistance, call our agent at {PHONE_NUMBER}.")
+                reply = (f"I can help with banking services here, or you can reach our phone agent at {PHONE_NUMBER}.")
             else:
                 reply = model_out
 
