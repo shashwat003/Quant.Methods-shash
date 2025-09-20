@@ -1,38 +1,49 @@
-# app.py — Bank of Shash • Customer Support (chat verification FSM + numeric DOB support)
+# app.py — Bank of Shash • Customer Support
+# Clean chat layout (no mixed ordering), verification FSM, readable buttons, rich banking content.
 
 import re
 import streamlit as st
 
-st.set_page_config(page_title="Bank of Shash • Customer Support", page_icon="🏦", layout="wide", initial_sidebar_state="collapsed")
+# ────────────────────────────────────────────────────────────────────────────────
+# PAGE / CONSTANTS
+# ────────────────────────────────────────────────────────────────────────────────
+st.set_page_config(page_title="Bank of Shash • Customer Support", page_icon="🏦",
+                   layout="wide", initial_sidebar_state="collapsed")
 PHONE_NUMBER = "+35345933308"
 
-# Azure (optional)
+# Hard-coded Azure OpenAI (optional; safe fallback if unset)
 AZURE_OPENAI_ENDPOINT    = "https://testaisentiment.openai.azure.com/"
 AZURE_OPENAI_API_KEY     = "cb1c33772b3c4edab77db69ae18c9a43"
 AZURE_OPENAI_API_VERSION = "2024-02-15-preview"
 AZURE_OPENAI_DEPLOYMENT  = "aipocexploration"
 
+# Demo customers
 CUSTOMERS = {
     "john cena":  {"name":"John Cena","last4":"1234","dob":"3rd november 2000","balance":2000.0,"lost_stolen_active":True},
     "sagar karnik":{"name":"Sagar Karnik","last4":"5678","dob":"3rd december 2005","balance":2500.0,"lost_stolen_active":True},
 }
 
-# ---------- Styles (same palette, slightly clearer chat input border) ----------
-BG, PANEL, BORDER, TEXT, MUTED = "#0b1220","#111827","#22314a","#eef2f7","#9fb0c7"
-PRIMARY, PRIMARY2, ACCENT, GOOD, WARN, DANGER = "#22d3ee","#0fb5cf","#7c3aed","#22c55e","#f59e0b","#ef4444"
+# ────────────────────────────────────────────────────────────────────────────────
+# THEME / STYLES (high contrast, readable buttons)
+# ────────────────────────────────────────────────────────────────────────────────
+BG, PANEL, BORDER, TEXT, MUTED = "#0b1220", "#111827", "#22314a", "#eef2f7", "#9fb0c7"
+PRIMARY, PRIMARY2, ACCENT, GOOD, WARN, DANGER = "#22d3ee", "#0fb5cf", "#7c3aed", "#22c55e", "#f59e0b", "#ef4444"
 st.markdown(f"""
 <style>
   html, body, .block-container {{ background:{BG}; color:{TEXT}; }}
   .card {{ background:{PANEL}; border:1px solid {BORDER}; border-radius:16px; padding:18px; box-shadow:0 10px 30px rgba(3,12,24,.45); }}
   .headline {{ font-size:2rem; font-weight:800; letter-spacing:-.02em; }}
   .soft {{ color:{MUTED}; }}
-  .pill {{ display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:999px; font-size:.85rem; background:rgba(34,211,238,.12); color:{PRIMARY}; border:1px solid rgba(34,211,238,.28); }}
+  .pill {{ display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:999px; font-size:.85rem;
+          background:rgba(34,211,238,.12); color:{PRIMARY}; border:1px solid rgba(34,211,238,.28); }}
   .stButton>button {{ background:#1f2937; color:{TEXT}; border:1px solid {BORDER}; border-radius:10px; font-weight:700; padding:.6rem 1rem; }}
-  .stButton>button:hover {{ background:linear-gradient(180deg,{PRIMARY} 0%, {PRIMARY2} 100%); color:#001016; border:0; box-shadow:0 6px 18px rgba(34,211,238,.18); }}
+  .stButton>button:hover {{ background:linear-gradient(180deg,{PRIMARY} 0%, {PRIMARY2} 100%); color:#001016; border:0;
+                            box-shadow:0 6px 18px rgba(34,211,238,.18); }}
   .ticker-wrap {{ width:100%; overflow:hidden; background:#0d3b37; border:1px solid #115e56; border-radius:14px; padding:8px 0; margin:10px 0 16px 0; }}
   .ticker {{ display:inline-block; white-space:nowrap; animation:scroll-left 18s linear infinite; font-weight:600; }}
   .ticker a {{ color:{PRIMARY}; text-decoration:none; }}
   @keyframes scroll-left {{ 0% {{transform:translateX(100%);}} 100% {{transform:translateX(-100%);}} }}
+  /* Chat container keeps bubbles inside and input at bottom */
   .chat-wrap {{ background:{PANEL}; border:1px solid {BORDER}; border-radius:16px; padding:0; }}
   div[data-testid="stChatMessage"] {{ margin-left:0 !important; margin-right:0 !important; }}
   div[data-testid="stChatInput"] textarea {{ background:#0c1423 !important; color:{TEXT} !important; border:2px solid {BORDER} !important; }}
@@ -40,12 +51,15 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- Optional LLM ----------
+# ────────────────────────────────────────────────────────────────────────────────
+# OPTIONAL LLM
+# ────────────────────────────────────────────────────────────────────────────────
 OPENAI_OK=True
 client=None
 try:
     from openai import AzureOpenAI
-    client=AzureOpenAI(azure_endpoint=AZURE_OPENAI_ENDPOINT, api_key=AZURE_OPENAI_API_KEY, api_version=AZURE_OPENAI_API_VERSION)
+    client=AzureOpenAI(azure_endpoint=AZURE_OPENAI_ENDPOINT, api_key=AZURE_OPENAI_API_KEY,
+                       api_version=AZURE_OPENAI_API_VERSION)
 except Exception:
     OPENAI_OK=False
 
@@ -53,12 +67,15 @@ def ask_gpt(messages, temperature=0.2, max_tokens=700):
     if not OPENAI_OK or not AZURE_OPENAI_DEPLOYMENT:
         return "(Model not configured.)"
     try:
-        r=client.chat.completions.create(model=AZURE_OPENAI_DEPLOYMENT, messages=messages, temperature=temperature, max_tokens=max_tokens)
+        r=client.chat.completions.create(model=AZURE_OPENAI_DEPLOYMENT,
+                                         messages=messages, temperature=temperature, max_tokens=max_tokens)
         return r.choices[0].message.content
     except Exception as e:
         return f"(Error calling Azure OpenAI: {e})"
 
-# ---------- System prompt (your call-agent prompt) ----------
+# ────────────────────────────────────────────────────────────────────────────────
+# SYSTEM PROMPT (your Retell agent prompt, mirrored)
+# ────────────────────────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """🧾 Identity & Purpose
 You are Sam, a friendly, professional, and knowledgeable virtual banking assistant for Bank of Shash.
 You assist customers with inquiries, account services, card issues (like fraud or stolen cards), and appointment scheduling.
@@ -78,7 +95,9 @@ Only proceed if verified.
 “Hello! This is Sam from Bank of Shash. How can I assist you today?”
 """
 
-# ---------- DOB parsing (extended) ----------
+# ────────────────────────────────────────────────────────────────────────────────
+# PARSING & VERIFICATION (with flexible DOB + numeric-only account support)
+# ────────────────────────────────────────────────────────────────────────────────
 MONTHS = {
     "1":"january","01":"january","jan":"january","january":"january",
     "2":"february","02":"february","feb":"february","february":"february",
@@ -94,39 +113,38 @@ MONTHS = {
     "12":"december","dec":"december","december":"december",
 }
 def norm(s:str)->str: return re.sub(r"\s+"," ",s.strip().lower())
+
 def human_dob(s:str)->str:
     s = s.strip()
-    # numeric: d/m/y or d-m-y
-    m = re.match(r"^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$", s)
+    m = re.match(r"^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$", s)  # 03/11/2000 or 3-11-2000
     if m:
         d, mo, y = m.groups()
-        month = MONTHS.get(mo.lstrip("0") or mo, None) or MONTHS.get(mo, None)
+        month = MONTHS.get(mo.lstrip("0") or mo, MONTHS.get(mo, None))
         return f"{int(d)} {month} {y}".lower() if month else s.lower()
-    # verbal (e.g., 3rd November 2000)
     m2 = re.match(r"^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(\d{4})$", s, flags=re.I)
     if m2:
         d, mo, y = m2.groups()
-        month = MONTHS.get(mo.lower(), mo.lower())
-        return f"{int(d)} {month} {y}".lower()
+        return f"{int(d)} {MONTHS.get(mo.lower(), mo.lower())} {y}".lower()
     return s.lower()
 
-# ---------- Identity patterns ----------
-NAME_P   = r"(john\s*cena|sagar\s*karnik)"
-LAST4_P  = r"(?:last\s*4\s*digits|last\s*four|\*\*\*\*|ending\s*in|last4)\D*(\d{4})"
-ACCT_P   = r"(?:account\s*number|acct\s*no\.?|a/c|account)\D*(\d{3,})"
-DOB_ANY  = r"(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}|(?:\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}))"
+NAME_P  = r"(john\s*cena|sagar\s*karnik)"
+LAST4_P = r"(?:last\s*4\s*digits|last\s*four|\*\*\*\*|ending\s*in|last4)\D*(\d{4})"
+ACCT_P  = r"(?:account\s*number|acct\s*no\.?|a/c|account)\D*(\d{3,})"
+DOB_ANY = r"(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}|(?:\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}))"
 
-def parse_identity(text:str):
+def parse_identity(text:str, expect_acct:bool=False):
     t = text.strip()
     tl = t.lower()
     name = re.search(NAME_P, tl)
     last4= re.search(LAST4_P, tl)
     acct = re.search(ACCT_P, tl)
+    # when we specifically wait for account number, accept a digits-only message
+    acct_only = re.match(r"^\s*(\d{5,})\s*$", t) if expect_acct else None
     dobm = re.search(DOB_ANY, t, flags=re.I)
     return (" ".join(name.group(1).split()) if name else None,
             last4.group(1) if last4 else None,
             human_dob(dobm.group(1)) if dobm else None,
-            acct.group(1) if acct else None)
+            acct.group(1) if acct else (acct_only.group(1) if acct_only else None))
 
 def verify(name,last4,dob):
     if not name or not last4 or not dob:
@@ -145,7 +163,9 @@ def verify(name,last4,dob):
         return False,f"Hmm, the {', '.join(issues)} don’t match our records. Could you check and try again?",None
     return True,f"Thanks {rec['name']}, you’re verified.",rec
 
-# ---------- State (FSM) ----------
+# ────────────────────────────────────────────────────────────────────────────────
+# STATE (FSM) + INIT
+# ────────────────────────────────────────────────────────────────────────────────
 def init_state():
     if "messages" not in st.session_state:
         st.session_state.messages=[
@@ -153,10 +173,13 @@ def init_state():
             {"role":"assistant","content":"Hello! This is Sam from Bank of Shash. How can I assist you today?"}
         ]
     if "verif" not in st.session_state:
-        st.session_state.verif={"step":"await_name","name":None,"acct":None,"last4":None,"dob":None,"tries":0,"ok":False,"record":None}
+        st.session_state.verif={"step":"await_name","name":None,"acct":None,"last4":None,"dob":None,
+                                "tries":0,"ok":False,"record":None}
 init_state()
 
-# ---------- Header / Ticker ----------
+# ────────────────────────────────────────────────────────────────────────────────
+# HEADER + TICKER
+# ────────────────────────────────────────────────────────────────────────────────
 hl, hr = st.columns([0.75,0.25])
 with hl:
     st.markdown(f"""
@@ -166,7 +189,8 @@ with hl:
         <span class="pill">● Live</span>
       </div>""", unsafe_allow_html=True)
 with hr:
-    st.markdown(f'<div style="text-align:right;"><a class="pill" href="tel:{PHONE_NUMBER}">📞 {PHONE_NUMBER}</a></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="text-align:right;"><a class="pill" href="tel:{PHONE_NUMBER}">📞 {PHONE_NUMBER}</a></div>',
+                unsafe_allow_html=True)
 
 st.markdown(f"""
 <div class="ticker-wrap"><div class="ticker">
@@ -175,7 +199,9 @@ st.markdown(f"""
 &nbsp;&nbsp;|&nbsp;&nbsp; 💡 Ask in chat: “Tell me about Green Mortgage eligibility.”
 </div></div>""", unsafe_allow_html=True)
 
-# ---------- Layout: left content (same as before, omitted here for brevity) ----------
+# ────────────────────────────────────────────────────────────────────────────────
+# LEFT: ACTIONS + RICH CONTENT
+# ────────────────────────────────────────────────────────────────────────────────
 left, right = st.columns([0.52,0.48])
 
 with left:
@@ -183,19 +209,83 @@ with left:
     a,b,c = st.columns(3)
     with a:
         if st.button("Report Lost/Stolen", use_container_width=True):
-            st.session_state.messages.append({"role":"user","content":"I lost my card."})
-            st.rerun()
+            st.session_state.messages.append({"role":"user","content":"I lost my card."}); st.rerun()
     with b:
         if st.button("Check Balance", use_container_width=True):
-            st.session_state.messages.append({"role":"user","content":"What's my account balance?"})
-            st.rerun()
+            st.session_state.messages.append({"role":"user","content":"What's my account balance?"}); st.rerun()
     with c:
         if st.button("Green Mortgage", use_container_width=True):
-            st.session_state.messages.append({"role":"user","content":"Tell me about Green Mortgage eligibility and rates."})
-            st.rerun()
+            st.session_state.messages.append({"role":"user","content":"Tell me about Green Mortgage eligibility and rates."}); st.rerun()
 
-    # (Products/Digital/Security/FAQ content from previous version can remain here)
+    # Products
+    st.markdown(f"""
+    <div class="card" style="margin-top:14px;">
+      <div style="font-weight:800;font-size:1.15rem;">Personal Banking Products</div>
+      <div class="soft">Explore our most popular services.</div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px;">
+        <div style="background:#0d1526;border:1px solid {BORDER};border-radius:14px;padding:12px;">
+          <div style="font-weight:700;">Current Account</div><div class="soft">No monthly fees with minimum balance. Instant notifications.</div>
+        </div>
+        <div style="background:#0d1526;border:1px solid {BORDER};border-radius:14px;padding:12px;">
+          <div style="font-weight:700;">Savings Plus</div><div class="soft">Competitive variable rate, flexible withdrawals.</div>
+        </div>
+        <div style="background:#0d1526;border:1px solid {BORDER};border-radius:14px;padding:12px;">
+          <div style="font-weight:700;">Visa Credit Card</div><div class="soft">0% FX fees for first 90 days on online purchases.</div>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
+    # Loans & Mortgages
+    st.markdown(f"""
+    <div class="card" style="margin-top:14px;">
+      <div style="font-weight:800;font-size:1.15rem;">Loans & Mortgages</div>
+      <div class="soft">Financing built for you.</div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px;">
+        <div style="background:#0e1b2a;border:1px solid {BORDER};border-radius:14px;padding:12px;">
+          <div style="font-weight:700;">Green Mortgage</div><div class="soft">Preferential rates for energy-efficient homes (BER A/B).</div>
+        </div>
+        <div style="background:#0e1b2a;border:1px solid {BORDER};border-radius:14px;padding:12px;">
+          <div style="font-weight:700;">Car Loan</div><div class="soft">Fixed low rates, decision in minutes.</div>
+        </div>
+        <div style="background:#0e1b2a;border:1px solid {BORDER};border-radius:14px;padding:12px;">
+          <div style="font-weight:700;">Student Loan</div><div class="soft">Flexible repayments while you study.</div>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Digital + Security
+    st.markdown(f"""
+    <div class="card" style="margin-top:14px;">
+      <div style="font-weight:800;font-size:1.15rem;">Digital Banking</div>
+      <ul class="soft" style="margin-top:8px;">
+        <li>Biometric login & virtual cards</li>
+        <li>Instant transfers & bill payments</li>
+        <li>Spending insights and budgeting</li>
+      </ul>
+      <hr style="border-color:{BORDER};">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:800;">Security Center</div>
+        <div class="pill">● Systems Operational</div>
+      </div>
+      <div class="soft" style="margin-top:6px;">Never share full card numbers, passwords or OTPs. We’ll never ask for them.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("Frequently Used Forms"):
+        st.markdown("- **Dispute a Card Transaction** — PDF form")
+        st.markdown("- **Address Change** — Online form")
+        st.markdown("- **Close/Reopen Account** — Online form")
+
+    with st.expander("FAQs"):
+        st.markdown("- **How do I freeze my card?** Use chat to confirm identity or call our agent. We can freeze instantly.")
+        st.markdown("- **What are branch hours?** 9 AM – 5 PM GMT.")
+        st.markdown("- **Green Mortgage?** Preferential rates for energy-efficient homes (BER A/B).")
+
+# ────────────────────────────────────────────────────────────────────────────────
+# RIGHT: CHAT (clean rerun pattern)
+# ────────────────────────────────────────────────────────────────────────────────
 with right:
     st.markdown(f"""
     <div class="card" style="margin-bottom:10px;">
@@ -207,30 +297,34 @@ with right:
     </div>""", unsafe_allow_html=True)
 
     st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+
+    # 1) Render entire history (skip system)
     for m in st.session_state.messages[1:]:
         with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
             st.write(m["content"])
 
+    # 2) Input at the bottom
     user_text = st.chat_input("Type your message…")
+
+    # 3) Handle submit → update state → append assistant reply → rerun (keeps order perfect)
     if user_text:
         st.session_state.messages.append({"role":"user","content":user_text})
-        with st.chat_message("user"): st.write(user_text)
 
         v = st.session_state.verif
-        name, last4, dob, acct = parse_identity(user_text)
+        # parse with awareness of current step, so digits-only works for account
+        name, last4, dob, acct = parse_identity(user_text, expect_acct=(v["step"]=="await_acct"))
         if name: v["name"]=name
         if acct: v["acct"]=acct
         if last4: v["last4"]=last4
         if dob: v["dob"]=dob
 
         reply = None
-
-        # -------------------- VERIFICATION FSM --------------------
+        # FSM verification — we NEVER call the model during verification
         if not v["ok"]:
             step = v["step"]
             if step == "await_name":
                 if v["name"]:
-                    v["step"]="await_acct"; reply=f"Thank you, {v['name'].title() if v['name'] else 'there'}. Can you provide your account number?"
+                    v["step"]="await_acct"; reply=f"Thank you, {v['name'].title()}. Can you provide your account number?"
                 else:
                     reply="For security, please share your full name as on the account."
             elif step == "await_acct":
@@ -250,16 +344,12 @@ with right:
                         v["ok"]=True; v["record"]=rec; v["step"]="verified"; reply=f"{msg} How can I help you today?"
                     else:
                         v["tries"] += 1
-                        if v["tries"] >= 2:
-                            reply=("I’m sorry, I can’t verify your account right now. "
-                                   "Please contact Bank of Shash support staff for further help.")
-                        else:
-                            reply=msg
+                        reply = ("I’m sorry, I can’t verify your account right now. Please contact Bank of Shash support staff for further help."
+                                 if v["tries"]>=2 else msg)
                 else:
                     reply="Please provide your date of birth (e.g., 3rd November 2000 or 03/11/2000)."
-        # ----------------------------------------------------------
 
-        # Verified: handle intents locally
+        # After verification, handle intents locally
         if v["ok"] and reply is None:
             rec = v["record"]; low = user_text.lower()
             if "balance" in low:
@@ -279,20 +369,20 @@ with right:
                 reply = ("Happy to help with an appointment. Please share your first name, email, and account type. "
                          "I’ll check availability and confirm or offer two alternative slots.")
 
-        # General Q&A (only after verification or for non-sensitive topics)
+        # General Q&A only when non-sensitive or verified
         if reply is None:
-            non_sensitive = all(k not in user_text.lower() for k in ["balance","card","lost","stolen","fraud","account"])
-            if non_sensitive:
+            sensitive = any(k in user_text.lower() for k in ["balance","card","lost","stolen","fraud","account"])
+            if (not sensitive) or v["ok"]:
                 out = ask_gpt(st.session_state.messages)
                 reply = out if not out.startswith("(") else f"I can help here, or you can call {PHONE_NUMBER}."
             else:
-                # If sensitive intent but not verified, keep FSM prompt (already set). Fallback safe.
                 reply = "For security, please complete verification first."
 
         st.session_state.messages.append({"role":"assistant","content":reply})
-        with st.chat_message("assistant"): st.write(reply)
+        # IMPORTANT: do not echo bubbles here; just rerun so the list renders in order
+        st.rerun()
 
-    st.markdown("</div>", unsafe_allow_html=True)  # close chat-wrap
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # Footer
 st.markdown("<hr style='border-color:#1f2937;'>", unsafe_allow_html=True)
