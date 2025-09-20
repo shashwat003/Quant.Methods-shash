@@ -1,6 +1,7 @@
 # app.py — Bank of Shash • Customer Support
 # Clean chat layout (no mixed ordering), verification FSM, readable buttons, rich banking content.
-# FIX: last-4 parsing accepts plain digits; on mismatch, FSM goes back to last-4 step.
+# CHANGE: Validate last-4 immediately at 'await_last4' step (no advance on mismatch).
+# CHANGE: Remove DOB examples from the on-screen prompts.
 
 import re
 import streamlit as st
@@ -144,10 +145,10 @@ def parse_identity(text:str, expect_acct:bool=False, expect_last4:bool=False):
     name = re.search(NAME_P, tl)
     last4 = re.search(LAST4_P, tl)
     if expect_last4 and not last4:
-        last4 = re.match(r"^\s*(\d{4})\s*$", t)  # <-- accept plain 4 digits
+        last4 = re.match(r"^\s*(\d{4})\s*$", t)  # accept plain 4 digits
     acct = re.search(ACCT_P, tl)
     if expect_acct and not acct:
-        acct = re.match(r"^\s*(\d{5,})\s*$", t)  # <-- accept plain digits for account
+        acct = re.match(r"^\s*(\d{5,})\s*$", t)  # accept plain digits for account
 
     dobm = re.search(DOB_ANY, t, flags=re.I)
 
@@ -161,7 +162,7 @@ def verify(name,last4,dob):
         missing=[]
         if not name: missing.append("full name")
         if not last4: missing.append("last 4 digits")
-        if not dob: missing.append("date of birth (e.g., 3rd November 2000)")
+        if not dob: missing.append("date of birth")
         return False,"For security, please provide your "+", ".join(missing)+".",None
     rec = CUSTOMERS.get(name)
     if not rec:
@@ -308,15 +309,13 @@ with right:
 
     st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
 
-    # 1) Render entire history (skip system)
+    # Render history (skip system)
     for m in st.session_state.messages[1:]:
         with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
             st.write(m["content"])
 
-    # 2) Input at the bottom
     user_text = st.chat_input("Type your message…")
 
-    # 3) Handle submit → update state → append assistant reply → rerun (keeps order perfect)
     if user_text:
         st.session_state.messages.append({"role":"user","content":user_text})
 
@@ -348,34 +347,32 @@ with right:
                     reply="Please share your account number."
             elif step == "await_last4":
                 if v["last4"]:
-                    v["step"]="await_dob"; reply="Got it. Finally, please provide your date of birth (e.g., 3rd November 2000 or 03/11/2000)."
-                else:
-                    reply="Please provide the last 4 digits of your debit card."
-            elif step == "await_dob":
-                # If last-4 doesn't match the customer's record, push user back to the last-4 step
-                if v["name"] in CUSTOMERS:
-                    rec = CUSTOMERS[v["name"]]
-                    if v["last4"] and v["last4"] != rec["last4"]:
+                    # NEW: validate last-4 immediately against the named customer (if we have a name)
+                    if v["name"] in CUSTOMERS and v["last4"] != CUSTOMERS[v["name"]]["last4"]:
                         v["last4"] = None
-                        v["step"] = "await_last4"
                         v["tries"] += 1
                         reply = ("Hmm, the last 4 digits don’t match our records. Could you check and try again?"
                                  if v["tries"] < 2 else
                                  "I’m sorry, I can’t verify your account right now. Please contact Bank of Shash support staff for further help.")
-                if reply is None:
-                    if v["dob"] and v["last4"] and v["name"]:
-                        ok, msg, rec = verify(v["name"], v["last4"], v["dob"])
-                        if ok:
-                            v["ok"]=True; v["record"]=rec; v["step"]="verified"; reply=f"{msg} How can I help you today?"
-                        else:
-                            # If DOB is wrong, keep asking DOB; if name wrong (unlikely here), ask name again
-                            if "date of birth" in msg:
-                                reply = "Hmm, that date of birth doesn’t match our records. Please check and enter it again (e.g., 3rd November 2000 or 03/11/2000)."
-                            else:
-                                v["step"] = "await_name"
-                                reply = "I couldn’t find that customer. Please enter your full name exactly as on the account."
                     else:
-                        reply="Please provide your date of birth (e.g., 3rd November 2000 or 03/11/2000)."
+                        v["step"]="await_dob"; reply="Got it. Finally, please provide your date of birth."
+                else:
+                    reply="Please provide the last 4 digits of your debit card."
+            elif step == "await_dob":
+                # If at DOB stage, we only check DOB now; last-4 already validated earlier
+                if v["dob"] and v["last4"] and v["name"]:
+                    ok, msg, rec = verify(v["name"], v["last4"], v["dob"])
+                    if ok:
+                        v["ok"]=True; v["record"]=rec; v["step"]="verified"; reply=f"{msg} How can I help you today?"
+                    else:
+                        # If DOB wrong, keep asking DOB; if name wrong (rare), restart at name
+                        if "date of birth" in msg:
+                            reply = "That date of birth doesn’t match our records. Please check and enter it again."
+                        else:
+                            v["step"] = "await_name"
+                            reply = "I couldn’t find that customer. Please enter your full name exactly as on the account."
+                else:
+                    reply="Please provide your date of birth."
 
         # After verification, handle intents locally
         if v["ok"] and reply is None:
